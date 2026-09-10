@@ -6,15 +6,18 @@ import 'package:google_generative_ai/google_generative_ai.dart';
 ///
 /// Masaustu surumundeki gibi: gecici asiri yuklenme (503) hatalarinda
 /// kisa bir bekleme ile tekrar dener; ana model kaldirilmis/bulunamiyorsa
-/// (404) veya tum denemelerde asiri yukluyse otomatik olarak yedek modele
-/// gecer.
+/// (404) veya ucretsiz kota (429) doluysa otomatik olarak yedek modele
+/// gecer. Kota hatasinda Gemini'nin "Please retry in Ns" mesajindaki
+/// bekleme suresi kullanilir.
 class GeminiService {
   static const fallbackModel = 'gemini-3.6-flash';
-  static const _overloadRetryDelays = [
-    Duration(seconds: 2),
-    Duration(seconds: 4),
-  ];
-  static const _fallbackRetryDelays = [Duration(seconds: 2)];
+  static const _defaultQuotaWait = Duration(seconds: 5);
+  static const _maxQuotaWait = Duration(seconds: 20);
+
+  static final RegExp _retryAfterPattern = RegExp(
+    r'retry in ([\d.]+)\s*s',
+    caseSensitive: false,
+  );
 
   Future<String> ask({
     required String apiKey,
@@ -43,13 +46,14 @@ class GeminiService {
         modelName: modelName,
         systemInstruction: persona,
         content: content,
-        retryDelays: _overloadRetryDelays,
+        maxAttempts: 3,
       );
       return _extractText(response);
     } catch (primaryError) {
       final shouldFallback = modelName != fallbackModel &&
           (_isOverloadError(primaryError) ||
-              _isModelRetiredError(primaryError));
+              _isModelRetiredError(primaryError) ||
+              _isQuotaError(primaryError));
       if (!shouldFallback) rethrow;
       try {
         final response = await _generateWithRetry(
@@ -57,7 +61,7 @@ class GeminiService {
           modelName: fallbackModel,
           systemInstruction: persona,
           content: content,
-          retryDelays: _fallbackRetryDelays,
+          maxAttempts: 2,
         );
         return _extractText(response);
       } catch (_) {
@@ -77,7 +81,7 @@ class GeminiService {
     required String modelName,
     required Content systemInstruction,
     required List<Content> content,
-    required List<Duration> retryDelays,
+    required int maxAttempts,
   }) async {
     final model = GenerativeModel(
       model: modelName,
@@ -85,14 +89,22 @@ class GeminiService {
       systemInstruction: systemInstruction,
     );
 
-    final attempts = retryDelays.length + 1;
-    for (var attempt = 0; attempt < attempts; attempt++) {
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
       try {
         return await model.generateContent(content);
       } catch (exc) {
-        final isLastAttempt = attempt == attempts - 1;
-        if (isLastAttempt || !_isOverloadError(exc)) rethrow;
-        await Future.delayed(retryDelays[attempt]);
+        final isLastAttempt = attempt == maxAttempts - 1;
+        if (isLastAttempt) rethrow;
+
+        if (_isOverloadError(exc)) {
+          await Future.delayed(Duration(seconds: 2 * (attempt + 1)));
+          continue;
+        }
+        if (_isQuotaError(exc)) {
+          await Future.delayed(_parseRetryAfter(exc) ?? _defaultQuotaWait);
+          continue;
+        }
+        rethrow;
       }
     }
     throw StateError('generateContent hicbir deneme yapmadan basarisiz oldu.');
@@ -110,5 +122,21 @@ class GeminiService {
     return text.contains('404') ||
         text.contains('not_found') ||
         text.contains('no longer available');
+  }
+
+  bool _isQuotaError(Object exc) {
+    final text = exc.toString().toLowerCase();
+    return text.contains('429') ||
+        text.contains('quota') ||
+        text.contains('resource_exhausted');
+  }
+
+  Duration? _parseRetryAfter(Object exc) {
+    final match = _retryAfterPattern.firstMatch(exc.toString());
+    if (match == null) return null;
+    final seconds = double.tryParse(match.group(1)!);
+    if (seconds == null) return null;
+    final capped = seconds.clamp(1.0, _maxQuotaWait.inSeconds.toDouble());
+    return Duration(milliseconds: (capped * 1000).round());
   }
 }
