@@ -67,6 +67,9 @@ ASSETS_DIR = resource_path("assets")
 SLEEP_AFTER_MS = 3 * 60 * 1000  # 3 dakika hareketsizlikten sonra uyku
 REVERT_TO_NORMAL_MS = 4000  # smile/fear gosterildikten sonra norm'a donus
 
+FALLBACK_MODEL = "gemini-1.5-flash"
+OVERLOAD_RETRY_DELAYS = (2, 4)  # saniye; ana modelde 503 aldiginda bekleme sureleri
+
 STATE_FILES = {
     "norm": "fuff_norm.png",
     "zzz": "fuff_zzz.png",
@@ -196,21 +199,48 @@ class GeminiWorker(QThread):
             "bir dil modeli oldugunu veya hangi sirkete/modele ait oldugunu "
             "asla soyleme. Kisa, samimi ve yardimsever konus."
         )
+        contents = [
+            self.question,
+            types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
+        ]
+        gen_config = types.GenerateContentConfig(system_instruction=persona)
 
         try:
             client = genai.Client(api_key=self.api_key)
-            response = client.models.generate_content(
-                model=self.model_name,
-                contents=[
-                    self.question,
-                    types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
-                ],
-                config=types.GenerateContentConfig(system_instruction=persona),
-            )
+            try:
+                response = self._generate_with_retry(client, self.model_name, contents, gen_config)
+            except Exception as primary_exc:
+                if self._is_overload_error(primary_exc) and self.model_name != FALLBACK_MODEL:
+                    try:
+                        response = self._generate_with_retry(
+                            client, FALLBACK_MODEL, contents, gen_config, retry_delays=(2,)
+                        )
+                    except Exception:
+                        raise primary_exc
+                else:
+                    raise
             text = (response.text or "").strip() or "(Bos yanit dondu)"
             self.finished_ok.emit(text)
         except Exception as exc:
             self.finished_error.emit(f"Gemini API hatasi: {exc}")
+
+    @staticmethod
+    def _is_overload_error(exc):
+        text = str(exc).lower()
+        return "503" in text or "unavailable" in text or "overloaded" in text
+
+    def _generate_with_retry(self, client, model_name, contents, gen_config, retry_delays=OVERLOAD_RETRY_DELAYS):
+        attempts = len(retry_delays) + 1
+        for attempt in range(attempts):
+            try:
+                return client.models.generate_content(
+                    model=model_name, contents=contents, config=gen_config
+                )
+            except Exception as exc:
+                is_last_attempt = attempt == attempts - 1
+                if is_last_attempt or not self._is_overload_error(exc):
+                    raise
+                time.sleep(retry_delays[attempt])
 
 
 # --------------------------------------------------------------------------
