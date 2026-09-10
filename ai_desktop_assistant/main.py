@@ -147,11 +147,12 @@ class GeminiWorker(QThread):
     finished_ok = pyqtSignal(str)
     finished_error = pyqtSignal(str)
 
-    def __init__(self, api_key, model_name, question, parent=None):
+    def __init__(self, api_key, model_name, question, character_name, parent=None):
         super().__init__(parent)
         self.api_key = api_key
         self.model_name = model_name
         self.question = question
+        self.character_name = character_name
 
     def run(self):
         try:
@@ -176,6 +177,14 @@ class GeminiWorker(QThread):
             )
             return
 
+        persona = (
+            f"Senin adin '{self.character_name}'. Kullanicinin masaustunde yasayan, "
+            "onun ekranini gorebilen sevimli bir yapay zeka asistanisin. Kendini her "
+            "zaman bu isimle tanit; Google tarafindan gelistirilmis bir dil modeli "
+            "oldugunu veya hangi sirkete/modele ait oldugunu asla soyleme. Kisa, "
+            "samimi ve yardimsever konus."
+        )
+
         try:
             client = genai.Client(api_key=self.api_key)
             response = client.models.generate_content(
@@ -184,6 +193,7 @@ class GeminiWorker(QThread):
                     self.question,
                     types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
                 ],
+                config=types.GenerateContentConfig(system_instruction=persona),
             )
             text = (response.text or "").strip() or "(Bos yanit dondu)"
             self.finished_ok.emit(text)
@@ -486,7 +496,12 @@ class DesktopCharacter(QWidget):
         self._set_pixmap(self.frames["think"][0])
         self.bubble.show_thinking()
 
-        self.worker = GeminiWorker(api_key, self.config.get("model_name"), question)
+        self.worker = GeminiWorker(
+            api_key,
+            self.config.get("model_name"),
+            question,
+            self.config.get("character_name"),
+        )
         self.worker.finished_ok.connect(self._on_answer)
         self.worker.finished_error.connect(self._on_answer_error)
         self.worker.finished.connect(self._reset_state_to_idle)
