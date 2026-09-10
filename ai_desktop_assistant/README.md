@@ -1,17 +1,18 @@
-# AI Masaustu Yardimcisi
+# AI Kedi Asistani
 
-Windows masaustunde dolasan, seffaf arka planli, Gemini destekli bir
-masaustu karakteri (PyQt6).
+Windows masaustunde duran, seffaf arka planli, Gemini destekli bir kedi
+karakteri (PyQt6).
 
 ## Ozellikler
 
-- Gorev cubugunun hemen ustunde rastgele sola/saga yuruyen, bazen duran
-  bir karakter (idle/walk animasyonu, `assets/` klasorunden okunur).
-- Fare ile surukleyip istediginiz yere tasiyabilirsiniz.
-- Sag tik menusu: boyut (%50 / %100 / %150), karakter ismi degistirme,
-  Gemini API anahtari ayari, cikis.
-- Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; karakter
-  "think" gorseline gecer, `mss` ile ekran goruntusu alir, Gemini Flash
+- Masaustunde sabit duran, fare ile surukleyip istediginiz yere
+  tasiyabileceginiz bir kedi karakteri (`assets/` klasorunden okunur).
+- Durumlar: normal, uyku (3 dakika hareketsizlikten sonra), dusunurken,
+  mutlu (cevap geldiginde), hata.
+- Sag tik menusu: boyut degistir (%50 / %75 / %100 / %150), kediye isim
+  ver, Gemini API key ayarlari, cikis.
+- Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; kedi
+  "dusunme" gorseline gecer, `mss` ile ekran goruntusu alir, Gemini Flash
   modeline (goruntu + soru) gonderir ve yaniti balonda gosterir. Tum bu
   islem arka plan thread'inde (QThread) calisir, arayuz donmaz.
 
@@ -36,10 +37,10 @@ yer tutucu karakterle calismaya devam eder (bkz. `assets/README.md`).
 ```bash
 pip install pyinstaller
 
-pyinstaller --onefile --windowed --name "AI-Masaustu-Yardimcisi" ^
+pyinstaller --onefile --windowed --name "AI-Kedi-Asistani" ^
     --add-data "assets;assets" main.py
 ```
 
-Derlenen dosya `dist\AI-Masaustu-Yardimcisi.exe` altinda olusur.
+Derlenen dosya `dist\AI-Kedi-Asistani.exe` altinda olusur.
 Detaylı adimlar ve simge ekleme secenegi `main.py` dosyasinin en
 altindaki yorum blogunda anlatilmistir.

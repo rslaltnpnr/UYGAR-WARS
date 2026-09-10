@@ -1,8 +1,8 @@
 """
-AI Masaustu Yardimcisi
------------------------
-Windows masaustunde dolasan, seffaf arka planli, surklenebilir bir
-karakter. Cift tiklaninca acilan konusma balonundan soru sorulur;
+AI Kedi Asistani
+-----------------
+Windows masaustunde duran, seffaf arka planli, surklenebilir bir kedi
+karakteri. Cift tiklaninca acilan konusma balonundan soru sorulur;
 ekran goruntusu alinip Google Gemini Flash modeline gonderilir ve
 yanit balonda gosterilir.
 
@@ -16,8 +16,8 @@ yer alir.
 
 import json
 import os
-import random
 import sys
+import time
 
 from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -29,7 +29,6 @@ from PyQt6.QtGui import (
     QPainter,
     QPen,
     QPixmap,
-    QTransform,
 )
 from PyQt6.QtWidgets import (
     QApplication,
@@ -65,11 +64,24 @@ def resource_path(relative_path):
 CONFIG_PATH = os.path.join(base_dir(), "config.json")
 ASSETS_DIR = resource_path("assets")
 
+SLEEP_AFTER_MS = 3 * 60 * 1000  # 3 dakika hareketsizlikten sonra uyku
+REVERT_TO_NORMAL_MS = 4000  # smile/fear gosterildikten sonra norm'a donus
+
+STATE_FILES = {
+    "norm": "fuff_norm.png",
+    "zzz": "fuff_zzz.png",
+    "smile": "fuff_smile.png",
+    "stern": "fuff_stern.png",
+    "fear": "fuff_fear.png",
+}
+
 DEFAULT_CONFIG = {
-    "character_name": "Robo-Kedi",
+    "character_name": "Fuff",
     "gemini_api_key": "",
     "scale_percent": 100,
-    "model_name": "gemini-flash-latest",
+    "model_name": "gemini-2.0-flash",
+    "pos_x": None,
+    "pos_y": None,
 }
 
 
@@ -147,11 +159,12 @@ class GeminiWorker(QThread):
     finished_ok = pyqtSignal(str)
     finished_error = pyqtSignal(str)
 
-    def __init__(self, api_key, model_name, question, parent=None):
+    def __init__(self, api_key, model_name, question, character_name, parent=None):
         super().__init__(parent)
         self.api_key = api_key
         self.model_name = model_name
         self.question = question
+        self.character_name = character_name
 
     def run(self):
         try:
@@ -176,6 +189,14 @@ class GeminiWorker(QThread):
             )
             return
 
+        persona = (
+            f"Senin adin '{self.character_name}'. Kullanicinin masaustunde yasayan, "
+            "onun ekranini gorebilen sevimli bir kedi yapay zeka asistanisin. "
+            "Kendini her zaman bu isimle tanit; Google tarafindan gelistirilmis "
+            "bir dil modeli oldugunu veya hangi sirkete/modele ait oldugunu "
+            "asla soyleme. Kisa, samimi ve yardimsever konus."
+        )
+
         try:
             client = genai.Client(api_key=self.api_key)
             response = client.models.generate_content(
@@ -184,6 +205,7 @@ class GeminiWorker(QThread):
                     self.question,
                     types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
                 ],
+                config=types.GenerateContentConfig(system_instruction=persona),
             )
             text = (response.text or "").strip() or "(Bos yanit dondu)"
             self.finished_ok.emit(text)
@@ -251,7 +273,7 @@ class ChatBubble(QWidget):
         layout.setContentsMargins(14, 12, 14, 12)
 
         header = QHBoxLayout()
-        title = QPushButton(f"\U0001F4AC {character_name}")
+        title = QPushButton(f"\U0001F431 {character_name}")
         title.setEnabled(False)
         title.setStyleSheet(
             "background: transparent; color: white; font-weight: bold; "
@@ -303,11 +325,11 @@ class ChatBubble(QWidget):
 
 
 # --------------------------------------------------------------------------
-# Masaustu karakteri
+# Masaustu kedi karakteri
 # --------------------------------------------------------------------------
 
-class DesktopCharacter(QWidget):
-    SPRITE_BASE_SIZE = 96
+class CatCharacter(QWidget):
+    SPRITE_BASE_SIZE = 110
 
     def __init__(self, config: ConfigManager):
         super().__init__()
@@ -322,65 +344,59 @@ class DesktopCharacter(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
 
         self.scale_factor = self.config.get("scale_percent") / 100.0
-        self.frames = {}
-        self._load_frames()
+        self.pixmaps = {}
+        self._load_pixmaps()
 
-        self.state = "idle"
-        self.frame_index = 0
-        self.direction = 1
+        self.state = "norm"
         self.current_pixmap = None
         self._dragging = False
         self._drag_offset = QPoint()
-        self._walk_steps_left = 0
+        self.last_activity = time.monotonic()
         self.bubble = None
         self.worker = None
 
-        self._position_on_taskbar()
-        self._set_pixmap(self.frames["idle"][0])
+        self._position_window()
+        self._set_state("norm")
 
-        self.anim_timer = QTimer(self)
-        self.anim_timer.timeout.connect(self._advance_animation_frame)
-        self.anim_timer.start(450)
+        self.sleep_check_timer = QTimer(self)
+        self.sleep_check_timer.timeout.connect(self._check_sleep)
+        self.sleep_check_timer.start(5000)
 
-        self.step_timer = QTimer(self)
-        self.step_timer.timeout.connect(self._step)
-        self.step_timer.start(40)
-
-        self.behavior_timer = QTimer(self)
-        self.behavior_timer.setSingleShot(True)
-        self.behavior_timer.timeout.connect(self._choose_behavior)
-        self.behavior_timer.start(1500)
+        self.revert_timer = QTimer(self)
+        self.revert_timer.setSingleShot(True)
+        self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
 
     # -- gorsel yukleme / olcekleme -------------------------------------
 
-    def _load_frames(self):
-        raw = {
-            "idle": [load_pixmap("idle1.png", "idle"), load_pixmap("idle2.png", "idle")],
-            "walk": [load_pixmap("walk1.png", "walk"), load_pixmap("walk2.png", "walk")],
-            "think": [load_pixmap("think.png", "?")],
-        }
-        self.frames = {state: [self._scaled(p) for p in pixmaps] for state, pixmaps in raw.items()}
+    def _load_pixmaps(self):
+        for state, filename in STATE_FILES.items():
+            raw = load_pixmap(filename, state)
+            self.pixmaps[state] = raw.scaled(
+                max(24, int(self.SPRITE_BASE_SIZE * self.scale_factor)),
+                max(24, int(self.SPRITE_BASE_SIZE * self.scale_factor)),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
 
-    def _scaled(self, pixmap):
-        target = max(24, int(self.SPRITE_BASE_SIZE * self.scale_factor))
-        return pixmap.scaled(
-            target,
-            target,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
-        )
-
-    def _position_on_taskbar(self):
+    def _position_window(self):
         screen = QApplication.primaryScreen().availableGeometry()
-        w = self.frames["idle"][0].width()
-        h = self.frames["idle"][0].height()
-        x = random.randint(screen.left(), max(screen.left(), screen.right() - w))
-        y = screen.bottom() - h
+        w = self.pixmaps["norm"].width()
+        h = self.pixmaps["norm"].height()
+
+        saved_x = self.config.get("pos_x")
+        saved_y = self.config.get("pos_y")
+        if saved_x is not None and saved_y is not None:
+            x = min(max(saved_x, screen.left()), screen.right() - w)
+            y = min(max(saved_y, screen.top()), screen.bottom() - h)
+        else:
+            x = screen.right() - w - 40
+            y = screen.bottom() - h - 20
+
         self.move(x, y)
 
-    def _set_pixmap(self, pixmap):
-        if self.direction < 0:
-            pixmap = pixmap.transformed(QTransform().scale(-1, 1))
+    def _set_state(self, state):
+        self.state = state
+        pixmap = self.pixmaps.get(state, self.pixmaps["norm"])
         self.current_pixmap = pixmap
         self.setFixedSize(pixmap.size())
         self.update()
@@ -391,52 +407,27 @@ class DesktopCharacter(QWidget):
         if self.current_pixmap:
             painter.drawPixmap(0, 0, self.current_pixmap)
 
-    # -- animasyon / rastgele davranis -----------------------------------
+    # -- uyku modu ----------------------------------------------------------
 
-    def _advance_animation_frame(self):
-        frames = self.frames.get(self.state, self.frames["idle"])
-        self.frame_index = (self.frame_index + 1) % len(frames)
-        self._set_pixmap(frames[self.frame_index])
+    def _register_activity(self):
+        self.last_activity = time.monotonic()
+        if self.state == "zzz":
+            self._set_state("norm")
 
-    def _choose_behavior(self):
-        if self.state == "think" or self._dragging:
-            self.behavior_timer.start(1500)
+    def _check_sleep(self):
+        if self.state in ("stern",) or self._dragging:
             return
-
-        if random.random() < 0.45:
-            self.state = "idle"
-            self._walk_steps_left = 0
-            next_delay = random.randint(2000, 5000)
-        else:
-            self.state = "walk"
-            self.direction = random.choice([-1, 1])
-            self._walk_steps_left = random.randint(30, 90)
-            next_delay = random.randint(2500, 6000)
-
-        self.frame_index = 0
-        self.behavior_timer.start(next_delay)
-
-    def _step(self):
-        if self.state != "walk" or self._dragging:
+        if self.state == "zzz":
             return
-        screen = QApplication.primaryScreen().availableGeometry()
-        new_x = self.x() + self.direction * 3
-        if new_x <= screen.left():
-            new_x = screen.left()
-            self.direction = 1
-        elif new_x + self.width() >= screen.right():
-            new_x = screen.right() - self.width()
-            self.direction = -1
-        self.move(new_x, self.y())
-
-        self._walk_steps_left -= 1
-        if self._walk_steps_left <= 0:
-            self.state = "idle"
-            self.frame_index = 0
+        idle_ms = (time.monotonic() - self.last_activity) * 1000
+        if idle_ms >= SLEEP_AFTER_MS:
+            self.revert_timer.stop()
+            self._set_state("zzz")
 
     # -- surukleme --------------------------------------------------------
 
     def mousePressEvent(self, event):
+        self._register_activity()
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
             self._drag_offset = event.globalPosition().toPoint() - self.pos()
@@ -448,11 +439,15 @@ class DesktopCharacter(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
-        self._dragging = False
+        if self._dragging:
+            self._dragging = False
+            self.config.set("pos_x", self.x())
+            self.config.set("pos_y", self.y())
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
+            self._register_activity()
             self._open_bubble()
         super().mouseDoubleClickEvent(event)
 
@@ -478,35 +473,40 @@ class DesktopCharacter(QWidget):
     def _handle_question(self, question):
         api_key = self.config.get("gemini_api_key")
         if not api_key:
-            self.bubble.show_error("Once sag tik menusunden Gemini API Anahtarinizi girin.")
+            self.bubble.show_error("Once sag tik menusunden Gemini API Key ayarini girin.")
             return
 
-        self.state = "think"
-        self.frame_index = 0
-        self._set_pixmap(self.frames["think"][0])
+        self._register_activity()
+        self.revert_timer.stop()
+        self._set_state("stern")
         self.bubble.show_thinking()
 
-        self.worker = GeminiWorker(api_key, self.config.get("model_name"), question)
+        self.worker = GeminiWorker(
+            api_key,
+            self.config.get("model_name"),
+            question,
+            self.config.get("character_name"),
+        )
         self.worker.finished_ok.connect(self._on_answer)
         self.worker.finished_error.connect(self._on_answer_error)
-        self.worker.finished.connect(self._reset_state_to_idle)
         self.worker.start()
 
     def _on_answer(self, text):
+        self._set_state("smile")
+        self.revert_timer.start(REVERT_TO_NORMAL_MS)
         if self.bubble:
             self.bubble.show_response(text)
 
     def _on_answer_error(self, text):
+        self._set_state("fear")
+        self.revert_timer.start(REVERT_TO_NORMAL_MS)
         if self.bubble:
             self.bubble.show_error(text)
-
-    def _reset_state_to_idle(self):
-        self.state = "idle"
-        self.frame_index = 0
 
     # -- sag tik menusu -----------------------------------------------------
 
     def contextMenuEvent(self, event):
+        self._register_activity()
         menu = QMenu(self)
         menu.setStyleSheet(
             """
@@ -516,10 +516,10 @@ class DesktopCharacter(QWidget):
             """
         )
 
-        size_menu = menu.addMenu("Boyut")
+        size_menu = menu.addMenu("Boyut Degistir")
         size_group = QActionGroup(self)
         size_group.setExclusive(True)
-        for percent in (50, 100, 150):
+        for percent in (50, 75, 100, 150):
             action = QAction(f"%{percent}", self)
             action.setCheckable(True)
             action.setChecked(self.config.get("scale_percent") == percent)
@@ -527,11 +527,11 @@ class DesktopCharacter(QWidget):
             size_group.addAction(action)
             size_menu.addAction(action)
 
-        rename_action = QAction("Karakter Ismi Degistir", self)
+        rename_action = QAction("Kediye Isim Ver", self)
         rename_action.triggered.connect(self._rename_character)
         menu.addAction(rename_action)
 
-        api_key_action = QAction("Gemini API Anahtari Ayari", self)
+        api_key_action = QAction("Gemini API Key Ayarlari", self)
         api_key_action.triggered.connect(self._set_api_key)
         menu.addAction(api_key_action)
 
@@ -545,19 +545,21 @@ class DesktopCharacter(QWidget):
     def _set_scale(self, percent):
         self.config.set("scale_percent", percent)
         self.scale_factor = percent / 100.0
-        old_x = self.x()
+        old_x, old_y = self.x(), self.y()
 
-        self._load_frames()
-        self.frame_index = 0
-        current_frames = self.frames.get(self.state, self.frames["idle"])
-        self._set_pixmap(current_frames[0])
+        self._load_pixmaps()
+        self._set_state(self.state)
 
         screen = QApplication.primaryScreen().availableGeometry()
-        self.move(old_x, screen.bottom() - self.height())
+        new_x = min(max(old_x, screen.left()), screen.right() - self.width())
+        new_y = min(max(old_y, screen.top()), screen.bottom() - self.height())
+        self.move(new_x, new_y)
+        self.config.set("pos_x", new_x)
+        self.config.set("pos_y", new_y)
 
     def _rename_character(self):
         current = self.config.get("character_name")
-        name, ok = QInputDialog.getText(self, "Karakter Ismi", "Yeni isim:", text=current)
+        name, ok = QInputDialog.getText(self, "Kediye Isim Ver", "Yeni isim:", text=current)
         if ok and name.strip():
             self.config.set("character_name", name.strip())
             self.bubble = None  # yeni isimle yeniden olusturulsun
@@ -566,7 +568,7 @@ class DesktopCharacter(QWidget):
         current = self.config.get("gemini_api_key")
         key, ok = QInputDialog.getText(
             self,
-            "Gemini API Anahtari",
+            "Gemini API Key Ayarlari",
             "API anahtarinizi girin:",
             QLineEdit.EchoMode.Password,
             current,
@@ -584,8 +586,8 @@ def main():
     app.setQuitOnLastWindowClosed(False)
 
     config = ConfigManager(CONFIG_PATH)
-    character = DesktopCharacter(config)
-    character.show()
+    cat = CatCharacter(config)
+    cat.show()
 
     sys.exit(app.exec())
 
@@ -606,23 +608,24 @@ if __name__ == "__main__":
 #       pip install pyinstaller
 #
 # 2) "assets" klasorunun bu dosyayla (main.py) ayni klasorde oldugundan
-#    emin olun (idle1.png, idle2.png, walk1.png, walk2.png, think.png).
+#    emin olun (fuff_norm.png, fuff_zzz.png, fuff_smile.png,
+#    fuff_stern.png, fuff_fear.png).
 #
 # 3) Proje klasorunde asagidaki komutu calistirin. --add-data ile assets
 #    klasoru exe'nin icine gomulur (Windows'ta kaynak ve hedef ";" ile
 #    ayrilir):
 #
-#       pyinstaller --onefile --windowed --name "AI-Masaustu-Yardimcisi" ^
+#       pyinstaller --onefile --windowed --name "AI-Kedi-Asistani" ^
 #           --add-data "assets;assets" main.py
 #
 #    Ozel bir uygulama simgesi eklemek isterseniz (icon.ico dosyasi ile):
 #
-#       pyinstaller --onefile --windowed --name "AI-Masaustu-Yardimcisi" ^
+#       pyinstaller --onefile --windowed --name "AI-Kedi-Asistani" ^
 #           --add-data "assets;assets" --icon "icon.ico" main.py
 #
-# 4) Derleme bitince exe dosyasi "dist\AI-Masaustu-Yardimcisi.exe" altinda
+# 4) Derleme bitince exe dosyasi "dist\AI-Kedi-Asistani.exe" altinda
 #    olusur. config.json, exe ilk calistirildiginda exe ile ayni klasorde
-#    otomatik olarak olusturulur (API anahtari orada saklanir).
+#    otomatik olarak olusturulur (API anahtari ve pozisyon orada saklanir).
 #
 # 5) --windowed bayragi konsol penceresini gizler. Hata ayiklarken
 #    gecici olarak bu bayragi kaldirip konsolu gorebilirsiniz.
