@@ -67,8 +67,12 @@ ASSETS_DIR = resource_path("assets")
 SLEEP_AFTER_MS = 3 * 60 * 1000  # 3 dakika hareketsizlikten sonra uyku
 REVERT_TO_NORMAL_MS = 4000  # smile/fear gosterildikten sonra norm'a donus
 
-FALLBACK_MODEL = "gemini-1.5-flash"
+FALLBACK_MODEL = "gemini-3.6-flash"
 OVERLOAD_RETRY_DELAYS = (2, 4)  # saniye; ana modelde 503 aldiginda bekleme sureleri
+
+# Google'in kullanimdan kaldirdigi/eskimis model adlari: config.json'da
+# bunlardan biri kayitliysa otomatik olarak guncel varsayilana tasinir.
+DEPRECATED_MODELS = {"gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.0-pro"}
 
 STATE_FILES = {
     "norm": "fuff_norm.png",
@@ -82,7 +86,7 @@ DEFAULT_CONFIG = {
     "character_name": "Fuff",
     "gemini_api_key": "",
     "scale_percent": 100,
-    "model_name": "gemini-2.0-flash",
+    "model_name": "gemini-flash-latest",
     "pos_x": None,
     "pos_y": None,
 }
@@ -105,7 +109,13 @@ class ConfigManager:
                     self.data.update(json.load(f))
             except (json.JSONDecodeError, OSError):
                 pass
+            self._migrate_deprecated_model()
         else:
+            self.save()
+
+    def _migrate_deprecated_model(self):
+        if self.data.get("model_name") in DEPRECATED_MODELS:
+            self.data["model_name"] = DEFAULT_CONFIG["model_name"]
             self.save()
 
     def save(self):
@@ -210,7 +220,10 @@ class GeminiWorker(QThread):
             try:
                 response = self._generate_with_retry(client, self.model_name, contents, gen_config)
             except Exception as primary_exc:
-                if self._is_overload_error(primary_exc) and self.model_name != FALLBACK_MODEL:
+                should_try_fallback = self.model_name != FALLBACK_MODEL and (
+                    self._is_overload_error(primary_exc) or self._is_model_retired_error(primary_exc)
+                )
+                if should_try_fallback:
                     try:
                         response = self._generate_with_retry(
                             client, FALLBACK_MODEL, contents, gen_config, retry_delays=(2,)
@@ -228,6 +241,11 @@ class GeminiWorker(QThread):
     def _is_overload_error(exc):
         text = str(exc).lower()
         return "503" in text or "unavailable" in text or "overloaded" in text
+
+    @staticmethod
+    def _is_model_retired_error(exc):
+        text = str(exc).lower()
+        return "404" in text or "not_found" in text or "no longer available" in text
 
     def _generate_with_retry(self, client, model_name, contents, gen_config, retry_delays=OVERLOAD_RETRY_DELAYS):
         attempts = len(retry_delays) + 1
