@@ -9,8 +9,11 @@ karakteri (PyQt6).
   tasiyabileceginiz bir kedi karakteri (`assets/` klasorunden okunur).
 - Durumlar: normal, uyku (3 dakika hareketsizlikten sonra), dusunurken,
   mutlu (cevap geldiginde), hata.
-- Sag tik menusu: boyut degistir (%50 / %75 / %100 / %150), kediye isim
-  ver, Gemini API key ayarlari, cikis.
+- Sag tik menusu: boyut degistir (%50 / %75 / %100 / %150), birden
+  fazla skin varsa aralarinda gecis, kediye isim ver, sohbet gecmisi,
+  Gemini API key ayarlari, cikis.
+- Sohbet gecmisi `chat_history.json`'da saklanir; sag tik menusundeki
+  "Sohbet Gecmisi" panelinden gorulebilir ve temizlenebilir.
 - Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; kedi
   "dusunme" gorseline gecer, `mss` ile ekran goruntusu alir, Gemini Flash
   modeline (goruntu + soru) gonderir ve yaniti balonda gosterir. Tum bu

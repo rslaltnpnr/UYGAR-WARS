@@ -1,4 +1,5 @@
 config.json
+chat_history.json
 __pycache__/
 *.pyc
 build/

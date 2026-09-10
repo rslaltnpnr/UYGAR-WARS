@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import time
+from datetime import datetime
 
 from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -62,7 +63,9 @@ def resource_path(relative_path):
 
 
 CONFIG_PATH = os.path.join(base_dir(), "config.json")
+HISTORY_PATH = os.path.join(base_dir(), "chat_history.json")
 ASSETS_DIR = resource_path("assets")
+MAX_HISTORY_ENTRIES = 200
 
 SLEEP_AFTER_MS = 3 * 60 * 1000  # 3 dakika hareketsizlikten sonra uyku
 REVERT_TO_NORMAL_MS = 4000  # smile/fear gosterildikten sonra norm'a donus
@@ -87,6 +90,7 @@ DEFAULT_CONFIG = {
     "gemini_api_key": "",
     "scale_percent": 100,
     "model_name": "gemini-flash-latest",
+    "skin": "Varsayilan",
     "pos_x": None,
     "pos_y": None,
 }
@@ -134,8 +138,67 @@ class ConfigManager:
 
 
 # --------------------------------------------------------------------------
+# Sohbet gecmisi (chat_history.json)
+# --------------------------------------------------------------------------
+
+class ChatHistoryManager:
+    def __init__(self, path):
+        self.path = path
+        self.entries = []
+        self.load()
+
+    def load(self):
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.entries = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                self.entries = []
+
+    def save(self):
+        try:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.entries, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def add(self, question, answer, is_error=False):
+        self.entries.append(
+            {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "question": question,
+                "answer": answer,
+                "is_error": is_error,
+            }
+        )
+        if len(self.entries) > MAX_HISTORY_ENTRIES:
+            self.entries = self.entries[-MAX_HISTORY_ENTRIES:]
+        self.save()
+
+    def clear(self):
+        self.entries = []
+        self.save()
+
+
+# --------------------------------------------------------------------------
 # Gorsel yukleme (assets eksikse basit bir yer tutucu cizilir)
 # --------------------------------------------------------------------------
+
+def discover_skins():
+    """
+    assets/ altindaki her alt klasoru ayri bir "skin" olarak sunar
+    (fuff_norm.png vb. dosyalari icermesi beklenir). Kok dizindeki
+    gorseller her zaman "Varsayilan" adiyla erisilebilir kalir, boylece
+    yeni skin klasorleri eklemek mevcut kurulumu bozmaz.
+    """
+    skins = {"Varsayilan": ASSETS_DIR}
+    if os.path.isdir(ASSETS_DIR):
+        for name in sorted(os.listdir(ASSETS_DIR)):
+            full_path = os.path.join(ASSETS_DIR, name)
+            if os.path.isdir(full_path):
+                skins[name] = full_path
+    return skins
+
 
 def make_placeholder_pixmap(size=96, color=QColor(90, 170, 255), label=""):
     pixmap = QPixmap(size, size)
@@ -155,8 +218,8 @@ def make_placeholder_pixmap(size=96, color=QColor(90, 170, 255), label=""):
     return pixmap
 
 
-def load_pixmap(filename, placeholder_label=""):
-    path = os.path.join(ASSETS_DIR, filename)
+def load_pixmap(skin_dir, filename, placeholder_label=""):
+    path = os.path.join(skin_dir, filename)
     if os.path.exists(path):
         pixmap = QPixmap(path)
         if not pixmap.isNull():
@@ -373,6 +436,104 @@ class ChatBubble(QWidget):
 
 
 # --------------------------------------------------------------------------
+# Sohbet gecmisi paneli
+# --------------------------------------------------------------------------
+
+class ChatHistoryDialog(QWidget):
+    def __init__(self, history: ChatHistoryManager, character_name):
+        super().__init__()
+        self.history = history
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+        )
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedSize(360, 420)
+        self._build_ui(character_name)
+        self.refresh()
+
+    def _build_ui(self, character_name):
+        container = QWidget(self)
+        container.setGeometry(0, 0, self.width(), self.height())
+        container.setObjectName("historyPanel")
+        container.setStyleSheet(
+            """
+            #historyPanel {
+                background-color: rgba(30, 30, 40, 220);
+                border-radius: 16px;
+                border: 1px solid rgba(255, 255, 255, 60);
+            }
+            QPushButton {
+                background-color: rgba(90, 170, 255, 220);
+                border: none;
+                border-radius: 8px;
+                padding: 6px 10px;
+                color: white;
+                font-weight: bold;
+            }
+            QPushButton:hover { background-color: rgba(120, 190, 255, 230); }
+            QTextEdit {
+                background-color: rgba(255, 255, 255, 15);
+                border: none;
+                border-radius: 8px;
+                color: white;
+                padding: 6px;
+            }
+            """
+        )
+
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(14, 12, 14, 12)
+
+        header = QHBoxLayout()
+        title = QPushButton(f"\U0001F553 {character_name} - Sohbet Gecmisi")
+        title.setEnabled(False)
+        title.setStyleSheet(
+            "background: transparent; color: white; font-weight: bold; "
+            "font-size: 13px; text-align: left; border: none; padding: 0;"
+        )
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(22, 22)
+        close_btn.setStyleSheet(
+            "background-color: rgba(255, 80, 80, 180); border-radius: 11px; padding: 0;"
+        )
+        close_btn.clicked.connect(self.close)
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(close_btn)
+        layout.addLayout(header)
+
+        self.text_area = QTextEdit()
+        self.text_area.setReadOnly(True)
+        layout.addWidget(self.text_area, 1)
+
+        footer = QHBoxLayout()
+        footer.addStretch()
+        clear_btn = QPushButton("Gecmisi Temizle")
+        clear_btn.clicked.connect(self._on_clear)
+        footer.addWidget(clear_btn)
+        layout.addLayout(footer)
+
+    def refresh(self):
+        if not self.history.entries:
+            self.text_area.setPlainText("Henuz bir sohbet gecmisi yok.")
+            return
+        lines = []
+        for entry in reversed(self.history.entries):  # en yeni en ustte
+            marker = "⚠" if entry.get("is_error") else "\U0001F431"
+            lines.append(f"[{entry['time']}]")
+            lines.append(f"Sen: {entry['question']}")
+            lines.append(f"{marker} {entry['answer']}")
+            lines.append("")
+        self.text_area.setPlainText("\n".join(lines))
+
+    def _on_clear(self):
+        self.history.clear()
+        self.refresh()
+
+
+# --------------------------------------------------------------------------
 # Masaustu kedi karakteri
 # --------------------------------------------------------------------------
 
@@ -402,6 +563,9 @@ class CatCharacter(QWidget):
         self.last_activity = time.monotonic()
         self.bubble = None
         self.worker = None
+        self.history = ChatHistoryManager(HISTORY_PATH)
+        self.history_dialog = None
+        self._pending_question = None
 
         self._position_window()
         self._set_state("norm")
@@ -417,8 +581,10 @@ class CatCharacter(QWidget):
     # -- gorsel yukleme / olcekleme -------------------------------------
 
     def _load_pixmaps(self):
+        skins = discover_skins()
+        skin_dir = skins.get(self.config.get("skin"), ASSETS_DIR)
         for state, filename in STATE_FILES.items():
-            raw = load_pixmap(filename, state)
+            raw = load_pixmap(skin_dir, filename, state)
             self.pixmaps[state] = raw.scaled(
                 max(24, int(self.SPRITE_BASE_SIZE * self.scale_factor)),
                 max(24, int(self.SPRITE_BASE_SIZE * self.scale_factor)),
@@ -518,6 +684,23 @@ class CatCharacter(QWidget):
         self.bubble.raise_()
         self.bubble.activateWindow()
 
+    def _open_history(self):
+        if self.history_dialog is None:
+            self.history_dialog = ChatHistoryDialog(self.history, self.config.get("character_name"))
+        self.history_dialog.refresh()
+
+        panel_x = self.x() + self.width() // 2 - self.history_dialog.width() // 2
+        panel_y = self.y() - self.history_dialog.height() - 10
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        panel_x = max(screen.left(), min(panel_x, screen.right() - self.history_dialog.width()))
+        panel_y = max(screen.top(), panel_y)
+
+        self.history_dialog.move(panel_x, panel_y)
+        self.history_dialog.show()
+        self.history_dialog.raise_()
+        self.history_dialog.activateWindow()
+
     def _handle_question(self, question):
         api_key = self.config.get("gemini_api_key")
         if not api_key:
@@ -528,6 +711,7 @@ class CatCharacter(QWidget):
         self.revert_timer.stop()
         self._set_state("stern")
         self.bubble.show_thinking()
+        self._pending_question = question
 
         self.worker = GeminiWorker(
             api_key,
@@ -544,12 +728,22 @@ class CatCharacter(QWidget):
         self.revert_timer.start(REVERT_TO_NORMAL_MS)
         if self.bubble:
             self.bubble.show_response(text)
+        self._log_history(text, is_error=False)
 
     def _on_answer_error(self, text):
         self._set_state("fear")
         self.revert_timer.start(REVERT_TO_NORMAL_MS)
         if self.bubble:
             self.bubble.show_error(text)
+        self._log_history(text, is_error=True)
+
+    def _log_history(self, answer, is_error):
+        if self._pending_question is None:
+            return
+        self.history.add(self._pending_question, answer, is_error=is_error)
+        self._pending_question = None
+        if self.history_dialog is not None:
+            self.history_dialog.refresh()
 
     # -- sag tik menusu -----------------------------------------------------
 
@@ -575,9 +769,27 @@ class CatCharacter(QWidget):
             size_group.addAction(action)
             size_menu.addAction(action)
 
+        skins = discover_skins()
+        if len(skins) > 1:
+            skin_menu = menu.addMenu("Kedi Skin'i")
+            skin_group = QActionGroup(self)
+            skin_group.setExclusive(True)
+            current_skin = self.config.get("skin")
+            for skin_name in skins:
+                action = QAction(skin_name, self)
+                action.setCheckable(True)
+                action.setChecked(skin_name == current_skin)
+                action.triggered.connect(lambda checked, s=skin_name: self._set_skin(s))
+                skin_group.addAction(action)
+                skin_menu.addAction(action)
+
         rename_action = QAction("Kediye Isim Ver", self)
         rename_action.triggered.connect(self._rename_character)
         menu.addAction(rename_action)
+
+        history_action = QAction("Sohbet Gecmisi", self)
+        history_action.triggered.connect(self._open_history)
+        menu.addAction(history_action)
 
         api_key_action = QAction("Gemini API Key Ayarlari", self)
         api_key_action.triggered.connect(self._set_api_key)
@@ -605,12 +817,27 @@ class CatCharacter(QWidget):
         self.config.set("pos_x", new_x)
         self.config.set("pos_y", new_y)
 
+    def _set_skin(self, skin_name):
+        self.config.set("skin", skin_name)
+        old_x, old_y = self.x(), self.y()
+
+        self._load_pixmaps()
+        self._set_state(self.state)
+
+        screen = QApplication.primaryScreen().availableGeometry()
+        new_x = min(max(old_x, screen.left()), screen.right() - self.width())
+        new_y = min(max(old_y, screen.top()), screen.bottom() - self.height())
+        self.move(new_x, new_y)
+        self.config.set("pos_x", new_x)
+        self.config.set("pos_y", new_y)
+
     def _rename_character(self):
         current = self.config.get("character_name")
         name, ok = QInputDialog.getText(self, "Kediye Isim Ver", "Yeni isim:", text=current)
         if ok and name.strip():
             self.config.set("character_name", name.strip())
             self.bubble = None  # yeni isimle yeniden olusturulsun
+            self.history_dialog = None  # yeni isimle yeniden olusturulsun
 
     def _set_api_key(self):
         current = self.config.get("gemini_api_key")
