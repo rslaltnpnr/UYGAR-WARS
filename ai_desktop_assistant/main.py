@@ -27,8 +27,9 @@ import sys
 import time
 import traceback
 import webbrowser
-from urllib.parse import urlparse
+from collections import deque
 from datetime import datetime
+from urllib.parse import urlparse
 
 from PyQt6.QtCore import QObject, QPoint, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -551,7 +552,8 @@ class RemoteCommandServer(QThread):
       POST /media      {"pin", "action"} - medya tuslarini simule eder
       POST /power      {"pin", "action"} - kilitler / uyku moduna alir
       POST /screenshot {"pin"}           - kucultulmus bir ekran goruntusu dondurur
-      POST /history    {"pin"}           - sohbet gecmisini dondurur (telefona ice aktarmak icin)
+      POST /history    {"pin"}               - sohbet gecmisini dondurur (telefona ice aktarmak icin)
+      POST /alerts     {"pin", "since_id"}   - since_id'den sonraki hata/uyari bildirimlerini dondurur
     Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
     (ana/GUI thread'ine Qt tarafindan otomatik kuyruklanir) yayinlanir.
     """
@@ -560,15 +562,35 @@ class RemoteCommandServer(QThread):
     media_command_received = pyqtSignal(str)
     power_command_received = pyqtSignal(str)
 
+    MAX_ALERTS = 50
+
     def __init__(self, config: ConfigManager, history: ChatHistoryManager, parent=None):
         super().__init__(parent)
         self.config = config
         self.history = history
         self._httpd = None
+        # Telefonun yokladigi (poll) hata/uyari kuyrugu - deque kullanilir
+        # cunku Handler thread'i bu listeyi (yeniden atama degil, sadece
+        # append/otomatik-trim ile) referans olarak paylasir.
+        self.alerts = deque(maxlen=self.MAX_ALERTS)
+        self._next_alert_id = 1
+
+    def add_alert(self, message):
+        """Ana/GUI thread'inden cagrilir (orn. bir Gemini hatasi olustugunda);
+        telefon /alerts ile bir sonraki yoklamasinda bunu gorur."""
+        self.alerts.append(
+            {
+                "id": self._next_alert_id,
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "message": str(message),
+            }
+        )
+        self._next_alert_id += 1
 
     def run(self):
         config = self.config
         history = self.history
+        alerts = self.alerts
         open_signal = self.command_received
         media_signal = self.media_command_received
         power_signal = self.power_command_received
@@ -590,7 +612,14 @@ class RemoteCommandServer(QThread):
                 self.wfile.write(body)
 
             def do_POST(self):
-                if self.path not in ("/open", "/media", "/power", "/screenshot", "/history"):
+                if self.path not in (
+                    "/open",
+                    "/media",
+                    "/power",
+                    "/screenshot",
+                    "/history",
+                    "/alerts",
+                ):
                     self._send_json(404, {"error": "bulunamadi"})
                     return
 
@@ -660,8 +689,17 @@ class RemoteCommandServer(QThread):
                     self._send_json(200, {"status": "ok", "image_base64": image_b64})
                     return
 
-                # self.path == "/history"
-                self._send_json(200, {"status": "ok", "entries": history.entries})
+                if self.path == "/history":
+                    self._send_json(200, {"status": "ok", "entries": history.entries})
+                    return
+
+                # self.path == "/alerts"
+                try:
+                    since_id = int(data.get("since_id", 0))
+                except (TypeError, ValueError):
+                    since_id = 0
+                new_alerts = [dict(a) for a in alerts if a["id"] > since_id]
+                self._send_json(200, {"status": "ok", "alerts": new_alerts})
 
         if not ensure_remote_tls_cert():
             return  # sertifika olusturulamadi - uzaktan kumanda olmadan devam et
@@ -1388,6 +1426,7 @@ class CatCharacter(QWidget):
         if self.bubble:
             self.bubble.show_error(text)
         self._log_history(text, is_error=True)
+        self.remote_server.add_alert(text)
 
     def _log_history(self, answer, is_error):
         if self._pending_question is None:

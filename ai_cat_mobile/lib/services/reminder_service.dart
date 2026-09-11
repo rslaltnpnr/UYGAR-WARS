@@ -2,9 +2,11 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-/// Kullanicinin "N dakika sonra hatirlat" seklinde kurdugu tekil
-/// hatirlaticilari yerel bildirim (flutter_local_notifications) olarak
-/// zamanlar. Bulut/Firebase gerektirmez - tamamen cihaz uzerinde calisir.
+/// Yerel bildirimleri (flutter_local_notifications) yonetir: kullanicinin
+/// "N dakika sonra hatirlat" seklinde kurdugu tekil hatirlaticilari
+/// zamanlar, ve eslesik bilgisayarda bir hata/uyari olustugunda anlik
+/// bildirim gosterir (bkz. showAlert). Bulut/Firebase gerektirmez -
+/// tamamen cihaz uzerinde calisir.
 ///
 /// Zamanlama gercek gecen sureye (Duration) gore yapildigi icin cihazin
 /// yerel saat dilimini tam olarak bilmeye gerek yok; TZDateTime hesabi
@@ -68,5 +70,21 @@ class ReminderService {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
+  }
+
+  /// Eslesik bilgisayarda olusan bir hata/uyariyi hemen bildirim olarak
+  /// gosterir (bkz. HomeScreen'in periyodik /alerts yoklamasi).
+  Future<void> showAlert({required String title, required String message}) async {
+    await _ensureInitialized();
+    const androidDetails = AndroidNotificationDetails(
+      'desktop_alerts',
+      'Masaüstü Uyarıları',
+      channelDescription:
+          'Eşleşen bilgisayarda oluşan hata/uyarılar burada görünür.',
+      importance: Importance.high,
+      priority: Priority.high,
+    );
+    const details = NotificationDetails(android: androidDetails);
+    await _plugin.show(_nextId++, title, message, details);
   }
 }

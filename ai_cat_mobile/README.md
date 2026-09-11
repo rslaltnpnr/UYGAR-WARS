@@ -51,6 +51,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   tarayici) bir linki "Paylas" menusunden "AI Kedi Asistani"na
   gonderirseniz, uygulama acilip "Bilgisayarda Ac" paneli o linkle dolu
   halde acilir - tek dokunusla bilgisayarda oynatabilirsiniz.
+- **Masaustu uyari bildirimleri**: uygulama acikken, eslesik bilgisayarda
+  bir Gemini hatasi olustuysa bunu ~45 saniyede bir yoklayip (poll) yerel
+  bir bildirim gosterir. Bulut/Firebase kullanmaz - tamamen ayni Wi-Fi
+  agi uzerinden calisir; bilgisayara ulasilamiyorsa (kapali, farkli ag)
+  sessizce yok sayar.
 
 ## 1) Gerekli araclari kurun (Windows)
 

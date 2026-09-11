@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "com.robokedi.ai_cat_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // receive_sharing_intent (paylasim/"Share" entegrasyonu) SDK 37+'a
+    // karsi derleme gerektiriyor; flutter.compileSdkVersion henuz 36.
+    compileSdk = maxOf(flutter.compileSdkVersion, 37)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
