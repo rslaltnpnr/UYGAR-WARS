@@ -10,6 +10,7 @@ import '../services/history_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/cat_sprite.dart';
 import '../widgets/chat_sheet.dart';
+import '../widgets/remote_control_sheet.dart';
 import '../widgets/roaming_cat.dart';
 import '../widgets/settings_dialog.dart';
 
@@ -111,6 +112,18 @@ class _HomeScreenState extends State<HomeScreen> {
     ); // isim degismis olabilir, baslik guncellensin
   }
 
+  void _openRemoteControl() {
+    _registerActivity();
+    final settings = _settings;
+    if (settings == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => RemoteControlSheet(settings: settings),
+    );
+  }
+
   Future<String> _handleQuestion(String question, Uint8List? imageBytes) async {
     final settings = _settings!;
     final history = _history!;
@@ -195,6 +208,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: IconButton(
                     icon: const Icon(Icons.settings, color: Colors.white54),
                     onPressed: _openSettings,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 48,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.desktop_windows,
+                      color: Colors.white54,
+                    ),
+                    tooltip: 'Bilgisayarı Kumanda Et',
+                    onPressed: _openRemoteControl,
                   ),
                 ),
                 Positioned(

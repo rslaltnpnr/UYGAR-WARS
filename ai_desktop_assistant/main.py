@@ -14,10 +14,14 @@ Dosyanin en altinda PyInstaller ile tek dosya (.exe) yapma adimlari
 yer alir.
 """
 
+import http.server
 import json
 import os
+import random
+import socket
 import sys
 import time
+import webbrowser
 from datetime import datetime
 
 from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal
@@ -37,6 +41,7 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QLineEdit,
     QMenu,
+    QMessageBox,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -85,6 +90,8 @@ STATE_FILES = {
     "fear": "fuff_fear.png",
 }
 
+REMOTE_SERVER_PORT = 8765
+
 DEFAULT_CONFIG = {
     "character_name": "Fuff",
     "gemini_api_key": "",
@@ -93,6 +100,7 @@ DEFAULT_CONFIG = {
     "skin": "Varsayilan",
     "pos_x": None,
     "pos_y": None,
+    "remote_pin": None,
 }
 
 
@@ -116,10 +124,16 @@ class ConfigManager:
             self._migrate_deprecated_model()
         else:
             self.save()
+        self._ensure_remote_pin()
 
     def _migrate_deprecated_model(self):
         if self.data.get("model_name") in DEPRECATED_MODELS:
             self.data["model_name"] = DEFAULT_CONFIG["model_name"]
+            self.save()
+
+    def _ensure_remote_pin(self):
+        if not self.data.get("remote_pin"):
+            self.data["remote_pin"] = f"{random.randint(0, 999999):06d}"
             self.save()
 
     def save(self):
@@ -225,6 +239,91 @@ def load_pixmap(skin_dir, filename, placeholder_label=""):
         if not pixmap.isNull():
             return pixmap
     return make_placeholder_pixmap(label=placeholder_label)
+
+
+# --------------------------------------------------------------------------
+# Uzaktan kumanda (telefon uygulamasindan yerel ag uzerinden komut)
+# --------------------------------------------------------------------------
+
+def get_local_ip():
+    """Telefonun bu bilgisayara baglanacagi yerel ag IP'si (internete
+    paket gondermeden, sadece isletim sistemine hangi arayuzun
+    kullanilacagini sordurarak bulunur)."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        ip = sock.getsockname()[0]
+        sock.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
+
+
+class RemoteCommandServer(QThread):
+    """
+    Telefon uygulamasindan POST /open ile ("pin", "url") alan basit bir
+    yerel HTTP sunucusu. Sadece ayni Wi-Fi agindan erisim beklenir;
+    PIN eslesmezse istek reddedilir. Gecerli bir istek geldiginde
+    command_received sinyali (ana/GUI thread'ine Qt tarafindan otomatik
+    kuyruklanir) yayinlanir.
+    """
+
+    command_received = pyqtSignal(str)
+
+    def __init__(self, config: ConfigManager, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self._httpd = None
+
+    def run(self):
+        config = self.config
+        signal = self.command_received
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def log_message(self, format_str, *args):
+                pass  # konsolu HTTP erisim loglariyla kirletme
+
+            def _send_json(self, status, payload):
+                body = json.dumps(payload).encode("utf-8")
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def do_POST(self):
+                if self.path != "/open":
+                    self._send_json(404, {"error": "bulunamadi"})
+                    return
+                try:
+                    length = int(self.headers.get("Content-Length", 0))
+                    data = json.loads(self.rfile.read(length))
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    self._send_json(400, {"error": "gecersiz istek govdesi"})
+                    return
+
+                if str(data.get("pin", "")) != str(config.get("remote_pin")):
+                    self._send_json(401, {"error": "gecersiz pin"})
+                    return
+
+                url = str(data.get("url", "")).strip()
+                if not url.startswith(("http://", "https://")):
+                    self._send_json(400, {"error": "gecersiz url"})
+                    return
+
+                signal.emit(url)
+                self._send_json(200, {"status": "ok"})
+
+        try:
+            self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", REMOTE_SERVER_PORT), Handler)
+            self._httpd.daemon_threads = True
+            self._httpd.serve_forever()
+        except OSError:
+            pass  # port kullanimda vb. - uygulama uzaktan kumanda olmadan calismaya devam eder
+
+    def stop(self):
+        if self._httpd is not None:
+            self._httpd.shutdown()
 
 
 # --------------------------------------------------------------------------
@@ -578,6 +677,10 @@ class CatCharacter(QWidget):
         self.revert_timer.setSingleShot(True)
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
 
+        self.remote_server = RemoteCommandServer(self.config, self)
+        self.remote_server.command_received.connect(self._on_remote_command)
+        self.remote_server.start()
+
     # -- gorsel yukleme / olcekleme -------------------------------------
 
     def _load_pixmaps(self):
@@ -745,6 +848,35 @@ class CatCharacter(QWidget):
         if self.history_dialog is not None:
             self.history_dialog.refresh()
 
+    # -- uzaktan kumanda ------------------------------------------------------
+
+    def _on_remote_command(self, url):
+        webbrowser.open(url)
+        self._register_activity()
+        self.revert_timer.stop()
+        self._set_state("smile")
+        self.revert_timer.start(REVERT_TO_NORMAL_MS)
+
+    def _show_remote_info(self):
+        self._register_activity()
+        ip = get_local_ip()
+        pin = self.config.get("remote_pin")
+        box = QMessageBox(self)
+        box.setWindowTitle("Uzaktan Kumanda")
+        box.setText(
+            "Telefon uygulamasindaki \"Bilgisayari Kumanda Et\" bolumune "
+            "bu bilgileri girin (ikisi de ayni Wi-Fi agina bagli olmali):\n\n"
+            f"IP Adresi: {ip}\n"
+            f"Port: {REMOTE_SERVER_PORT}\n"
+            f"PIN: {pin}"
+        )
+        regen_button = box.addButton("PIN'i Yenile", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() == regen_button:
+            self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
+            self._show_remote_info()
+
     # -- sag tik menusu -----------------------------------------------------
 
     def contextMenuEvent(self, event):
@@ -794,6 +926,10 @@ class CatCharacter(QWidget):
         api_key_action = QAction("Gemini API Key Ayarlari", self)
         api_key_action.triggered.connect(self._set_api_key)
         menu.addAction(api_key_action)
+
+        remote_action = QAction("Uzaktan Kumanda Bilgisi", self)
+        remote_action.triggered.connect(self._show_remote_info)
+        menu.addAction(remote_action)
 
         menu.addSeparator()
         exit_action = QAction("Cikis", self)
@@ -863,6 +999,8 @@ def main():
     config = ConfigManager(CONFIG_PATH)
     cat = CatCharacter(config)
     cat.show()
+
+    app.aboutToQuit.connect(cat.remote_server.stop)
 
     sys.exit(app.exec())
 

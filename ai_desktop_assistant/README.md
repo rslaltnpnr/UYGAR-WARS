@@ -11,7 +11,13 @@ karakteri (PyQt6).
   mutlu (cevap geldiginde), hata.
 - Sag tik menusu: boyut degistir (%50 / %75 / %100 / %150), birden
   fazla skin varsa aralarinda gecis, kediye isim ver, sohbet gecmisi,
-  Gemini API key ayarlari, cikis.
+  Gemini API key ayarlari, uzaktan kumanda bilgisi, cikis.
+- **Uzaktan kumanda**: `ai_cat_mobile` (Android) uygulamasindan ayni
+  Wi-Fi agi uzerinden bir baglanti gonderip bilgisayarda acilmasini
+  saglayabilirsiniz (orn. bir YouTube linki -> muzik/video calar).
+  Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port ve PIN'i gorursunuz;
+  bunlari telefon uygulamasindaki "Bilgisayari Kumanda Et" panelinde
+  bir kez girmeniz yeterli. PIN yanlissa istek reddedilir.
 - Sohbet gecmisi `chat_history.json`'da saklanir; sag tik menusundeki
   "Sohbet Gecmisi" panelinden gorulebilir ve temizlenebilir.
 - Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; kedi

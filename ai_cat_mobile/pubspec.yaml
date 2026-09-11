@@ -12,6 +12,7 @@ dependencies:
   google_generative_ai: ^0.4.7
   image_picker: ^1.1.2
   shared_preferences: ^2.3.2
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:
