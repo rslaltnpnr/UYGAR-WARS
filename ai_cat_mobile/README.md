@@ -37,7 +37,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   kalmasini dogrular; degisirse (olasi bir araya girme/MITM saldirisi)
   baglanti reddedilir ve acik bir uyari gosterilir. Panelde "Sertifika
   eslestirmesini sifirla" ile bu kaydi silip yeniden eslestirebilirsiniz
-  (orn. bilgisayar uygulamasi yeniden kurulduysa).
+  (orn. bilgisayar uygulamasi yeniden kurulduysa). Baglanti acmanin
+  yaninda ayni panelden: **medya kontrolu** (oynat/duraklat, ileri/geri,
+  ses acma/kisma/sessize alma), **kilitle/uyku** butonlari (onay sorar)
+  ve bilgisayarin kucultulmus bir **ekran goruntusunu** isteyip
+  gorebilirsiniz.
 
 ## 1) Gerekli araclari kurun (Windows)
 

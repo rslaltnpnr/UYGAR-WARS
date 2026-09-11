@@ -474,16 +474,90 @@ def is_url_safe_to_open(url):
     return True
 
 
+MEDIA_KEY_NAMES = {
+    "play_pause": "play/pause media",
+    "next": "next track",
+    "prev": "previous track",
+    "vol_up": "volume up",
+    "vol_down": "volume down",
+    "mute": "volume mute",
+}
+
+POWER_ACTIONS = ("sleep", "lock")
+
+
+def handle_media_action(action):
+    """Windows'ta medya tuslarini simule eder (keyboard kutuphanesi
+    araciligiyla - global kisayol icin de kullanilan ayni kutuphane)."""
+    if sys.platform != "win32":
+        return False
+    key = MEDIA_KEY_NAMES.get(action)
+    if key is None:
+        return False
+    try:
+        import keyboard
+
+        keyboard.send(key)
+        return True
+    except Exception:
+        return False
+
+
+def handle_power_action(action):
+    """Windows'ta bilgisayari kilitler ya da uyku moduna alir."""
+    if sys.platform != "win32" or action not in POWER_ACTIONS:
+        return False
+    try:
+        import ctypes
+
+        if action == "lock":
+            ctypes.windll.user32.LockWorkStation()
+            return True
+        # action == "sleep": hibernate degil normal uyku, zorla, uyanma
+        # olaylarini devre disi birakma.
+        ctypes.windll.powrprof.SetSuspendState(False, True, False)
+        return True
+    except Exception:
+        return False
+
+
+def capture_screenshot_jpeg_base64(max_width=1280, quality=70):
+    """Ekran goruntusunu alip kucultup JPEG olarak base64 dondurur -
+    telefona makul boyutta bir onizleme gondermek icin."""
+    import base64
+    import io
+
+    import mss
+    from PIL import Image
+
+    with mss.mss() as sct:
+        monitor = sct.monitors[0]
+        shot = sct.grab(monitor)
+    img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+    if img.width > max_width:
+        ratio = max_width / img.width
+        img = img.resize((max_width, max(1, int(img.height * ratio))))
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=quality)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
 class RemoteCommandServer(QThread):
     """
-    Telefon uygulamasindan POST /open ile ("pin", "url") alan basit bir
-    yerel HTTP sunucusu. Sadece ayni Wi-Fi agindan erisim beklenir;
-    PIN eslesmezse istek reddedilir. Gecerli bir istek geldiginde
-    command_received sinyali (ana/GUI thread'ine Qt tarafindan otomatik
-    kuyruklanir) yayinlanir.
+    Telefon uygulamasindan gelen komutlari alan basit bir yerel HTTP
+    sunucusu. Sadece ayni Wi-Fi agindan erisim beklenir; PIN eslesmezse
+    istek reddedilir. Uc noktalar:
+      POST /open       {"pin", "url"}    - taraycida bir baglanti acar
+      POST /media      {"pin", "action"} - medya tuslarini simule eder
+      POST /power      {"pin", "action"} - kilitler / uyku moduna alir
+      POST /screenshot {"pin"}           - kucultulmus bir ekran goruntusu dondurur
+    Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
+    (ana/GUI thread'ine Qt tarafindan otomatik kuyruklanir) yayinlanir.
     """
 
     command_received = pyqtSignal(str)
+    media_command_received = pyqtSignal(str)
+    power_command_received = pyqtSignal(str)
 
     def __init__(self, config: ConfigManager, parent=None):
         super().__init__(parent)
@@ -492,7 +566,9 @@ class RemoteCommandServer(QThread):
 
     def run(self):
         config = self.config
-        signal = self.command_received
+        open_signal = self.command_received
+        media_signal = self.media_command_received
+        power_signal = self.power_command_received
         # IP -> {"count": basarisiz deneme sayisi, "blocked_until": epoch}
         # Kaba kuvvetle PIN denemeyi yavaslatmak icin bellek ici, basit bir
         # kilitlenme mekanizmasi (kalici loglama yapilmiyor).
@@ -511,7 +587,7 @@ class RemoteCommandServer(QThread):
                 self.wfile.write(body)
 
             def do_POST(self):
-                if self.path != "/open":
+                if self.path not in ("/open", "/media", "/power", "/screenshot"):
                     self._send_json(404, {"error": "bulunamadi"})
                     return
 
@@ -545,13 +621,40 @@ class RemoteCommandServer(QThread):
 
                 failed_attempts.pop(client_ip, None)
 
-                url = str(data.get("url", "")).strip()
-                if not is_url_safe_to_open(url):
-                    self._send_json(400, {"error": "gecersiz veya guvensiz url"})
+                if self.path == "/open":
+                    url = str(data.get("url", "")).strip()
+                    if not is_url_safe_to_open(url):
+                        self._send_json(400, {"error": "gecersiz veya guvensiz url"})
+                        return
+                    open_signal.emit(url)
+                    self._send_json(200, {"status": "ok"})
                     return
 
-                signal.emit(url)
-                self._send_json(200, {"status": "ok"})
+                if self.path == "/media":
+                    action = str(data.get("action", ""))
+                    if action not in MEDIA_KEY_NAMES:
+                        self._send_json(400, {"error": "gecersiz eylem"})
+                        return
+                    media_signal.emit(action)
+                    self._send_json(200, {"status": "ok"})
+                    return
+
+                if self.path == "/power":
+                    action = str(data.get("action", ""))
+                    if action not in POWER_ACTIONS:
+                        self._send_json(400, {"error": "gecersiz eylem"})
+                        return
+                    power_signal.emit(action)
+                    self._send_json(200, {"status": "ok"})
+                    return
+
+                # self.path == "/screenshot"
+                try:
+                    image_b64 = capture_screenshot_jpeg_base64()
+                except Exception as exc:
+                    self._send_json(500, {"error": f"ekran goruntusu alinamadi: {exc}"})
+                    return
+                self._send_json(200, {"status": "ok", "image_base64": image_b64})
 
         if not ensure_remote_tls_cert():
             return  # sertifika olusturulamadi - uzaktan kumanda olmadan devam et
@@ -1104,6 +1207,8 @@ class CatCharacter(QWidget):
 
         self.remote_server = RemoteCommandServer(self.config, self)
         self.remote_server.command_received.connect(self._on_remote_command)
+        self.remote_server.media_command_received.connect(self._on_media_command)
+        self.remote_server.power_command_received.connect(self._on_power_command)
         self.remote_server.start()
 
         self._hotkey_signal = register_global_hotkey(self._open_bubble)
@@ -1293,6 +1398,16 @@ class CatCharacter(QWidget):
         self.revert_timer.stop()
         self._set_state("smile")
         self.revert_timer.start(REVERT_TO_NORMAL_MS)
+
+    def _on_media_command(self, action):
+        handle_media_action(action)
+        self._register_activity()
+        self.revert_timer.stop()
+        self._set_state("smile")
+        self.revert_timer.start(REVERT_TO_NORMAL_MS)
+
+    def _on_power_command(self, action):
+        handle_power_action(action)
 
     def _show_remote_info(self):
         self._register_activity()

@@ -102,6 +102,126 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     }
   }
 
+  Future<void> _sendMedia(String action) async {
+    if (_busy) return;
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.sendMedia(
+        ip: widget.settings.desktopIp,
+        port: widget.settings.desktopPort,
+        pin: widget.settings.desktopPin,
+        action: action,
+        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+      );
+      widget.settings.desktopCertFingerprint = result.fingerprint;
+      if (!mounted) return;
+      setState(() {
+        _status = 'Gönderildi.';
+        _statusIsError = false;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _confirmAndSendPower(String action, String label) async {
+    if (_busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('$label onayı'),
+        content: Text('Bilgisayarı $label istiyor musunuz?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Evet'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.sendPower(
+        ip: widget.settings.desktopIp,
+        port: widget.settings.desktopPort,
+        pin: widget.settings.desktopPin,
+        action: action,
+        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+      );
+      widget.settings.desktopCertFingerprint = result.fingerprint;
+      if (!mounted) return;
+      setState(() {
+        _status = 'Gönderildi.';
+        _statusIsError = false;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _takeScreenshot() async {
+    if (_busy) return;
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.fetchScreenshot(
+        ip: widget.settings.desktopIp,
+        port: widget.settings.desktopPort,
+        pin: widget.settings.desktopPin,
+        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+      );
+      widget.settings.desktopCertFingerprint = result.fingerprint;
+      if (!mounted) return;
+      setState(() => _busy = false);
+      showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: const EdgeInsets.all(12),
+          child: InteractiveViewer(
+            child: Image.memory(result.imageBytes),
+          ),
+        ),
+      );
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+        _busy = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -210,6 +330,72 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                         )
                       : const Icon(Icons.send),
                   label: const Text('Bilgisayarda Aç'),
+                ),
+                Divider(color: colors.divider, height: 32),
+                Text(
+                  'Medya Kontrolü',
+                  style: TextStyle(color: colors.textMuted, fontSize: 12),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.skip_previous, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('prev'),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.play_arrow, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('play_pause'),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.skip_next, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('next'),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.volume_down, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('vol_down'),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.volume_up, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('vol_up'),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.volume_off, color: colors.textPrimary),
+                      onPressed: _busy ? null : () => _sendMedia('mute'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _confirmAndSendPower('lock', 'kilitlemek'),
+                        icon: const Icon(Icons.lock_outline),
+                        label: const Text('Kilitle'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () => _confirmAndSendPower(
+                                'sleep', 'uyku moduna almak'),
+                        icon: const Icon(Icons.bedtime_outlined),
+                        label: const Text('Uyku'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _takeScreenshot,
+                  icon: const Icon(Icons.screenshot_monitor),
+                  label: const Text('Ekran Görüntüsü Al'),
                 ),
                 if (_status != null) ...[
                   const SizedBox(height: 12),
