@@ -69,11 +69,18 @@ karakteri (PyQt6).
 - **Hatirlatici**: sag tik menusundeki "Hatirlatici Kur" ile "X dakika
   sonra" seklinde tekil bir hatirlatici kurabilirsiniz; sure dolunca
   sistem tepsisinden bildirim gosterilir (tepsi yoksa bir pencere acilir).
-- **Guncelleme kontrolu**: acilista GitHub Releases'ten yeni bir surum
-  olup olmadigi sessizce kontrol edilir (bulunursa sistem tepsisinden
-  bildirim gosterilir); sag tik menusundeki "Guncellemeleri Kontrol Et"
-  ile istediginiz zaman elle de kontrol edebilirsiniz. Henuz bir release
-  yayinlanmamissa ya da internete erisim yoksa sessizce yok sayilir.
+- **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
+  Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
+  (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar
+  acilir); sag tik menusundeki "Guncellemeleri Kontrol Et" ile istediginiz
+  zaman elle de kontrol edebilirsiniz. Derlenmis (.exe) surumde yeni bir
+  surum bulunursa "Simdi Indir ve Kur" secenegiyle otomatik indirilip
+  (SHA-256 ile dogrulanip) kurulabilir; uygulama kisa sureligine kapanip
+  yeni surumle yeniden acilir. Kaynak koddan calistiriyorsaniz (`python
+  main.py`) yalnizca GitHub'daki release sayfasina yonlendirilirsiniz -
+  degistirilecek bir .exe olmadigindan otomatik kurulum atlanir. Henuz
+  bir release yayinlanmamissa ya da internete erisim yoksa sessizce yok
+  sayilir.
 
 ## Kurulum ve calistirma
 
@@ -103,3 +110,27 @@ pyinstaller --onefile --windowed --name "AI-Kedi-Asistani" ^
 Derlenen dosya `dist\AI-Kedi-Asistani.exe` altinda olusur.
 Detaylı adimlar ve simge ekleme secenegi `main.py` dosyasinin en
 altindaki yorum blogunda anlatilmistir.
+
+## Yeni bir surum yayinlama (otomatik guncelleme icin)
+
+Uygulama ici "Guncellemeleri Kontrol Et" ozelliginin bir seyle
+karsilastirabilmesi icin GitHub'da bir release olmasi gerekir. Bunu
+elle derleyip yuklemenize gerek yok - `.github/workflows/release-desktop.yml`
+bunu otomatik yapar:
+
+1. `main.py` icindeki `APP_VERSION` sabitini yeni surume guncelleyin
+   (orn. `"1.2.0"`) ve bunu `main`'e mergeleyin.
+2. Ayni surumle bir git etiketi (tag) olusturup gonderin:
+
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+
+3. Bu, `windows-latest` bir runner'da otomatik olarak PyInstaller ile
+   `.exe`'yi derler, SHA-256 checksum'ini uretir ve ikisini de bir
+   GitHub Release'e ekler. Birkaç dakika icinde hem release sayfasinda
+   hem de uygulama ici guncelleme kontrolunde gorunur.
+
+Etiket adi `v` ile baslamali (orn. `v1.2.0`) - surum karsilastirma
+mantigi bunu bekler.

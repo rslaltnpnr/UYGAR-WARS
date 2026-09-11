@@ -50,6 +50,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSystemTrayIcon,
     QTextEdit,
@@ -172,6 +173,11 @@ REMOTE_LOCKOUT_SECONDS = 60
 APP_VERSION = "1.1.0"
 GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
+UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
+# release-desktop.yml release'e bu adlarla dosya yukler - degistirilirse
+# ikisi de birlikte guncellenmeli.
+UPDATE_ASSET_NAME = "AI-Kedi-Asistani.exe"
+UPDATE_CHECKSUM_ASSET_NAME = "AI-Kedi-Asistani.exe.sha256"
 
 DEFAULT_CONFIG = {
     "character_name": "Fuff",
@@ -764,7 +770,8 @@ class UpdateCheckWorker(QThread):
     yapmaz - bu, mevcut kurulumu bozmayan, tamamen opsiyonel bir kontrol.
     """
 
-    update_available = pyqtSignal(str, str)  # tag_name, html_url
+    # tag_name, html_url, exe_download_url (bulunamazsa bos), checksum_download_url (bulunamazsa bos)
+    update_available = pyqtSignal(str, str, str, str)
     check_finished = pyqtSignal(bool, str)  # basarili mi, hata mesaji (varsa)
 
     def run(self):
@@ -795,8 +802,135 @@ class UpdateCheckWorker(QThread):
         tag = str(data.get("tag_name", "")).strip()
         html_url = str(data.get("html_url", "")).strip()
         if tag and is_newer_version(tag, APP_VERSION):
-            self.update_available.emit(tag, html_url)
+            download_url = ""
+            checksum_url = ""
+            for asset in data.get("assets", []) or []:
+                name = str(asset.get("name", ""))
+                asset_url = str(asset.get("browser_download_url", ""))
+                if name == UPDATE_ASSET_NAME:
+                    download_url = asset_url
+                elif name == UPDATE_CHECKSUM_ASSET_NAME:
+                    checksum_url = asset_url
+            self.update_available.emit(tag, html_url, download_url, checksum_url)
         self.check_finished.emit(True, "")
+
+
+class UpdateDownloadWorker(QThread):
+    """
+    Bir GitHub Release'inden yeni surum exe'sini indirir, varsa esliginde
+    gelen SHA-256 dosyasiyla dogrular. Yalnizca PyInstaller ile derlenmis
+    (frozen) halde anlamlidir - kaynaktan calisirken degistirilecek bir
+    exe yoktur.
+    """
+
+    progress = pyqtSignal(int)  # 0-100 (toplam boyut bilinmiyorsa hic yayinlanmaz)
+    finished_ok = pyqtSignal(str)  # indirilen dosyanin tam yolu
+    finished_error = pyqtSignal(str)
+
+    def __init__(self, download_url, checksum_url, parent=None):
+        super().__init__(parent)
+        self.download_url = download_url
+        self.checksum_url = checksum_url
+
+    def run(self):
+        import hashlib
+        import urllib.request
+
+        target_path = os.path.join(base_dir(), "AI-Kedi-Asistani-new.exe")
+        try:
+            req = urllib.request.Request(
+                self.download_url, headers={"User-Agent": "ai-kedi-asistani-update"}
+            )
+            digest = hashlib.sha256()
+            with urllib.request.urlopen(req, timeout=UPDATE_DOWNLOAD_TIMEOUT_SECONDS) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(target_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        digest.update(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            self.progress.emit(int(downloaded * 100 / total))
+        except Exception as exc:
+            try:
+                os.remove(target_path)
+            except OSError:
+                pass
+            self.finished_error.emit(f"Indirme basarisiz: {exc}")
+            return
+
+        if self.checksum_url:
+            try:
+                checksum_req = urllib.request.Request(
+                    self.checksum_url, headers={"User-Agent": "ai-kedi-asistani-update"}
+                )
+                with urllib.request.urlopen(
+                    checksum_req, timeout=UPDATE_CHECK_TIMEOUT_SECONDS
+                ) as resp:
+                    expected = resp.read().decode("utf-8").strip().split()[0].lower()
+                if expected != digest.hexdigest().lower():
+                    os.remove(target_path)
+                    self.finished_error.emit(
+                        "Indirilen dosyanin bütünlük dogrulamasi basarisiz oldu "
+                        "(SHA-256 uyusmuyor); guvenlik icin silindi."
+                    )
+                    return
+            except Exception as exc:
+                try:
+                    os.remove(target_path)
+                except OSError:
+                    pass
+                self.finished_error.emit(f"Bütünlük dogrulamasi yapilamadi: {exc}")
+                return
+
+        self.finished_ok.emit(target_path)
+
+
+def apply_update_and_restart(new_exe_path):
+    """
+    Calisan exe'yi indirilen yeni surumle degistirip yeniden baslatir.
+    Windows'ta calisan bir exe kendi uzerine yazilamadigindan, mevcut
+    surecin (PID) tam olarak kapanmasini bekleyen kucuk bir .bat betigi
+    olusturup arka planda calistirir, sonra uygulamayi kapatir.
+    Yalnizca PyInstaller ile derlenmis (frozen) halde calisir.
+    """
+    if not getattr(sys, "frozen", False):
+        return False
+    if sys.platform != "win32":
+        return False
+
+    current_exe = sys.executable
+    pid = os.getpid()
+    updater_script = os.path.join(base_dir(), "_ai_kedi_update.bat")
+    script = (
+        "@echo off\r\n"
+        ":wait\r\n"
+        f'tasklist /FI "PID eq {pid}" | find "{pid}" >nul\r\n'
+        "if not errorlevel 1 (\r\n"
+        "    timeout /t 1 /nobreak >nul\r\n"
+        "    goto wait\r\n"
+        ")\r\n"
+        f'move /Y "{new_exe_path}" "{current_exe}" >nul\r\n'
+        f'start "" "{current_exe}"\r\n'
+        'del "%~f0"\r\n'
+    )
+    try:
+        with open(updater_script, "w", encoding="utf-8") as f:
+            f.write(script)
+        subprocess.Popen(
+            ["cmd", "/c", updater_script],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            close_fds=True,
+        )
+    except OSError:
+        return False
+
+    QApplication.instance().quit()
+    return True
 
 
 # --------------------------------------------------------------------------
@@ -1264,6 +1398,7 @@ class CatCharacter(QWidget):
         self.update_worker = None
         self._update_check_manual = False
         self._last_update_info = None
+        self._update_download_worker = None
         QTimer.singleShot(3000, lambda: self._check_for_updates(manual=False))
 
     # -- gorsel yukleme / olcekleme -------------------------------------
@@ -1541,12 +1676,12 @@ class CatCharacter(QWidget):
         self.update_worker.check_finished.connect(self._on_update_check_finished)
         self.update_worker.start()
 
-    def _on_update_available(self, tag, html_url):
-        self._last_update_info = (tag, html_url)
+    def _on_update_available(self, tag, html_url, download_url, checksum_url):
+        self._last_update_info = (tag, html_url, download_url, checksum_url)
         if not self._update_check_manual and self.tray_icon is not None:
             self.tray_icon.showMessage(
                 "Yeni surum mevcut",
-                f"AI Kedi Asistani {tag} yayinlandi. GitHub'dan indirebilirsiniz.",
+                f"AI Kedi Asistani {tag} yayinlandi. Detaylar icin tiklayin.",
                 QSystemTrayIcon.MessageIcon.Information,
                 8000,
             )
@@ -1560,16 +1695,77 @@ class CatCharacter(QWidget):
             )
             return
         if self._last_update_info is not None:
-            tag, html_url = self._last_update_info
-            QMessageBox.information(
-                self,
-                "Guncelleme Mevcut",
-                f"Yeni surum mevcut: {tag} (su an: {APP_VERSION})\n\n{html_url}",
-            )
+            self._offer_update(*self._last_update_info)
         else:
             QMessageBox.information(
                 self, "Guncelleme Kontrolu", f"Kullandiginiz surum guncel ({APP_VERSION})."
             )
+
+    def _on_tray_message_clicked(self):
+        if self._last_update_info is not None:
+            self._offer_update(*self._last_update_info)
+
+    def _offer_update(self, tag, html_url, download_url, checksum_url):
+        can_auto_update = getattr(sys, "frozen", False) and sys.platform == "win32" and download_url
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Guncelleme Mevcut")
+        if can_auto_update:
+            box.setText(
+                f"Yeni surum mevcut: {tag} (su an: {APP_VERSION})\n\n"
+                "Otomatik olarak indirilip kurulsun mu? Uygulama kisa sureligine "
+                "kapanip yeniden acilacak."
+            )
+            download_btn = box.addButton("Simdi Indir ve Kur", QMessageBox.ButtonRole.AcceptRole)
+        else:
+            box.setText(
+                f"Yeni surum mevcut: {tag} (su an: {APP_VERSION})\n\n"
+                f"{html_url}\n\n"
+                "(Otomatik guncelleme yalnizca derlenmis .exe surumunde "
+                "calisir; kaynak koddan calistiriyorsaniz elle indirin.)"
+            )
+            download_btn = None
+        box.addButton("Daha Sonra", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if download_btn is not None and box.clickedButton() == download_btn:
+            self._start_update_download(download_url, checksum_url)
+
+    def _start_update_download(self, download_url, checksum_url):
+        progress = QProgressDialog("Guncelleme indiriliyor...", "Iptal", 0, 100, self)
+        progress.setWindowTitle("Guncelleniyor")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+
+        worker = UpdateDownloadWorker(download_url, checksum_url, self)
+        self._update_download_worker = worker  # referansi canli tut
+
+        worker.progress.connect(progress.setValue)
+        progress.canceled.connect(worker.terminate)
+
+        def on_ok(path):
+            progress.close()
+            restart_box = QMessageBox(self)
+            restart_box.setWindowTitle("Guncelleme Indirildi")
+            restart_box.setText(
+                "Guncelleme indirildi ve dogrulandi. Simdi yeniden baslatilsin mi?"
+            )
+            restart_btn = restart_box.addButton("Simdi Yeniden Baslat", QMessageBox.ButtonRole.AcceptRole)
+            restart_box.addButton("Daha Sonra", QMessageBox.ButtonRole.RejectRole)
+            restart_box.exec()
+            if restart_box.clickedButton() == restart_btn:
+                if not apply_update_and_restart(path):
+                    QMessageBox.warning(
+                        self, "Guncelleme", "Guncelleme uygulanamadi; elle indirip kurmayi deneyin."
+                    )
+
+        def on_error(message):
+            progress.close()
+            QMessageBox.warning(self, "Guncelleme", message)
+
+        worker.finished_ok.connect(on_ok)
+        worker.finished_error.connect(on_error)
+        worker.start()
 
     # -- sistem tepsisi -------------------------------------------------------
 
@@ -1590,6 +1786,7 @@ class CatCharacter(QWidget):
 
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.messageClicked.connect(self._on_tray_message_clicked)
         self.tray_icon.show()
 
     def _on_tray_activated(self, reason):
