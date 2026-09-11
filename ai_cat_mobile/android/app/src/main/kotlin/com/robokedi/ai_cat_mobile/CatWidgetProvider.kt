@@ -39,7 +39,7 @@ class CatWidgetProvider : HomeWidgetProvider() {
                 setOnClickPendingIntent(R.id.widget_btn_remote, remoteIntent)
 
                 val openAppIntent = HomeWidgetLaunchIntent.getActivity(context, MainActivity::class.java)
-                setOnClickPendingIntent(R.id.widget_title, openAppIntent)
+                setOnClickPendingIntent(R.id.widget_header, openAppIntent)
             }
 
             appWidgetManager.updateAppWidget(widgetId, views)

@@ -7,15 +7,35 @@
     android:background="@drawable/widget_background"
     android:padding="12dp">
 
-    <TextView
-        android:id="@+id/widget_title"
+    <LinearLayout
+        android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text="@string/widget_app_name"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold"/>
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/widget_header_background"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp">
+
+        <ImageView
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_marginEnd="6dp"
+            android:src="@mipmap/ic_launcher"/>
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/widget_app_name"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"/>
+    </LinearLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -29,11 +49,15 @@
             android:layout_weight="1"
             android:layout_marginEnd="6dp"
             android:background="@drawable/widget_button_background"
+            android:drawablePadding="4dp"
+            android:drawableTop="@drawable/ic_widget_chat"
             android:gravity="center"
-            android:padding="8dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
             android:text="@string/widget_action_chat"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"/>
+            android:textSize="11sp"
+            android:textStyle="bold"/>
 
         <TextView
             android:id="@+id/widget_btn_remote"
@@ -41,10 +65,14 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:background="@drawable/widget_button_background"
+            android:drawablePadding="4dp"
+            android:drawableTop="@drawable/ic_widget_remote"
             android:gravity="center"
-            android:padding="8dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
             android:text="@string/widget_action_remote"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"/>
+            android:textSize="11sp"
+            android:textStyle="bold"/>
     </LinearLayout>
 </LinearLayout>
