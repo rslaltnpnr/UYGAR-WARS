@@ -77,7 +77,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   butonlarini tasiyan kucuk bir widget'i ana ekraniniza eklersiniz - her
   ikisi de uygulamayi dogrudan ilgili panelle acar, tek dokunusla.
   Desteklenmiyorsa ana ekranda bos bir alana uzun basip "Widget'lar"
-  menusunden elle de eklenebilir.
+  menusunden elle de eklenebilir. Widget, eslesik bilgisayarin son
+  bilinen baglanti durumunu da gosterir ("Ev · bagli" / "bagli degil") -
+  bu bilgi, uygulama acikken zaten calisan 45 saniyelik uyari
+  yoklamasindan gelir (widget'in kendisi arka planda ag istegi yapmaz),
+  bu yuzden uygulamayi acip kapattiginizda tazelenir.
 
 ## 1) Gerekli araclari kurun (Windows)
 

@@ -4,4 +4,8 @@
     <string name="widget_action_chat">Sohbet</string>
     <string name="widget_action_remote">Kumanda</string>
     <string name="widget_description">Sohbeti veya bilgisayar kumandasını tek dokunuşla açar.</string>
+    <string name="widget_status_unknown">Durum bilinmiyor</string>
+    <string name="widget_status_no_profile">Eşleşmiş bilgisayar yok</string>
+    <string name="widget_status_connected">%1$s · bağlı</string>
+    <string name="widget_status_disconnected">%1$s · bağlı değil</string>
 </resources>

@@ -11,7 +11,7 @@
         android:id="@+id/widget_header"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="10dp"
+        android:layout_marginBottom="2dp"
         android:background="@drawable/widget_header_background"
         android:gravity="center_vertical"
         android:orientation="horizontal"
@@ -36,6 +36,17 @@
             android:textSize="13sp"
             android:textStyle="bold"/>
     </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/widget_status_unknown"
+        android:textColor="#9A9AA5"
+        android:textSize="11sp"/>
 
     <LinearLayout
         android:layout_width="match_parent"
