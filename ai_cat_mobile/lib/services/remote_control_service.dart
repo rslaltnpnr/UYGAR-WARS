@@ -35,6 +35,16 @@ class ScreenshotResult {
   const ScreenshotResult(this.fingerprint, this.imageBytes);
 }
 
+/// [fetchHistory] sonucu: parmak izinin yani sira bilgisayardaki sohbet
+/// gecmisi kayitlarini (ham JSON haritalari - cagiran taraf kendi
+/// ChatEntry modeline cevirir) tasir.
+class HistoryFetchResult {
+  final String fingerprint;
+  final List<Map<String, dynamic>> entries;
+
+  const HistoryFetchResult(this.fingerprint, this.entries);
+}
+
 class _RawResponse {
   final int statusCode;
   final String body;
@@ -243,6 +253,34 @@ class RemoteControlService {
       return ScreenshotResult(response.fingerprint, imageBytes);
     } catch (_) {
       throw RemoteControlException('Ekran goruntusu okunamadi.');
+    }
+  }
+
+  Future<HistoryFetchResult> fetchHistory({
+    required String ip,
+    required int port,
+    required String pin,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/history',
+      body: {'pin': pin},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      final entries = List<Map<String, dynamic>>.from(data['entries'] as List);
+      return HistoryFetchResult(response.fingerprint, entries);
+    } catch (_) {
+      throw RemoteControlException('Geçmiş okunamadı.');
     }
   }
 
