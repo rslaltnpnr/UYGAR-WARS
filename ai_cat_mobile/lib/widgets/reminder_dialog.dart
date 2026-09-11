@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/reminder_service.dart';
+import '../theme/app_colors.dart';
 
 /// "N dakika sonra hatırlat" seklinde tekil bir hatirlatici kurmak icin
 /// basit bir dialog.
@@ -62,9 +63,10 @@ class _ReminderDialogState extends State<ReminderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E28),
-      title: const Text('Hatırlatıcı Kur', style: TextStyle(color: Colors.white)),
+      backgroundColor: colors.panel,
+      title: Text('Hatırlatıcı Kur', style: TextStyle(color: colors.textPrimary)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -72,24 +74,24 @@ class _ReminderDialogState extends State<ReminderDialog> {
           TextField(
             controller: _minutesController,
             keyboardType: TextInputType.number,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
+            style: TextStyle(color: colors.textPrimary),
+            decoration: InputDecoration(
               labelText: 'Kaç dakika sonra?',
-              labelStyle: TextStyle(color: Colors.white54),
+              labelStyle: TextStyle(color: colors.textMuted),
             ),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _messageController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
+            style: TextStyle(color: colors.textPrimary),
+            decoration: InputDecoration(
               labelText: 'Hatırlatma mesajı (opsiyonel)',
-              labelStyle: TextStyle(color: Colors.white54),
+              labelStyle: TextStyle(color: colors.textMuted),
             ),
           ),
           if (_error != null) ...[
             const SizedBox(height: 10),
-            Text(_error!, style: const TextStyle(color: Color(0xFFFF8080), fontSize: 12)),
+            Text(_error!, style: TextStyle(color: colors.error, fontSize: 12)),
           ],
         ],
       ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
+import '../theme/app_colors.dart';
 
 /// "Bilgisayari Kumanda Et" paneli: masaustundeki kedi uygulamasina
 /// (ayni Wi-Fi agindan, PIN ile) bir baglanti gonderip acilmasini
@@ -103,15 +104,16 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return DraggableScrollableSheet(
       initialChildSize: 0.65,
       minChildSize: 0.4,
       maxChildSize: 0.9,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xE61E1E28),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: colors.panelTranslucent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: EdgeInsets.fromLTRB(
             16,
@@ -126,29 +128,29 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
               children: [
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '\u{1F4BB} Bilgisayarı Kumanda Et',
                         style: TextStyle(
-                          color: Colors.white,
+                          color: colors.textPrimary,
                           fontWeight: FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white70),
+                      icon: Icon(Icons.close, color: colors.textSecondary),
                       onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Bilgisayardaki kedi uygulamasında sağ tık menüsünden '
                   '"Uzaktan Kumanda Bilgisi"ni açıp buradaki IP, port ve '
                   'PIN\'i bir kez girin. İkisi de aynı Wi-Fi ağına bağlı '
                   'olmalı.',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                  style: TextStyle(color: colors.textMuted, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 _field(_ipController, 'Bilgisayar IP (örn. 192.168.1.20)'),
@@ -164,15 +166,15 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                   alignment: Alignment.centerRight,
                   child: TextButton.icon(
                     onPressed: _resetCertificatePairing,
-                    icon: const Icon(Icons.lock_reset,
-                        size: 16, color: Colors.white54),
-                    label: const Text(
+                    icon: Icon(Icons.lock_reset,
+                        size: 16, color: colors.textMuted),
+                    label: Text(
                       'Sertifika eşleştirmesini sıfırla',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                   ),
                 ),
-                const Divider(color: Colors.white24, height: 32),
+                Divider(color: colors.divider, height: 32),
                 _field(_urlController, 'Açılacak bağlantı (https://...)'),
                 const SizedBox(height: 10),
                 Wrap(
@@ -182,12 +184,12 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                       .map(
                         (preset) => ActionChip(
                           label: Text(preset.key),
-                          labelStyle: const TextStyle(
-                            color: Colors.white,
+                          labelStyle: TextStyle(
+                            color: colors.textPrimary,
                             fontSize: 12,
                           ),
-                          backgroundColor: Colors.white.withValues(alpha: 0.1),
-                          side: const BorderSide(color: Colors.white24),
+                          backgroundColor: colors.textPrimary.withValues(alpha: 0.1),
+                          side: BorderSide(color: colors.divider),
                           onPressed: () => setState(
                               () => _urlController.text = preset.value),
                         ),
@@ -198,12 +200,12 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                 ElevatedButton.icon(
                   onPressed: _busy ? null : _send,
                   icon: _busy
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Colors.white,
+                            color: colors.textPrimary,
                           ),
                         )
                       : const Icon(Icons.send),
@@ -214,9 +216,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                   Text(
                     _status!,
                     style: TextStyle(
-                      color: _statusIsError
-                          ? const Color(0xFFFF8080)
-                          : const Color(0xFF8CFF8C),
+                      color: _statusIsError ? colors.error : colors.success,
                       fontSize: 13,
                     ),
                   ),
@@ -234,18 +234,19 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     String label, {
     TextInputType? keyboardType,
   }) {
+    final colors = context.colors;
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: colors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: Colors.white54),
-        enabledBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white24),
+        labelStyle: TextStyle(color: colors.textMuted),
+        enabledBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: colors.divider),
         ),
-        focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Color(0xFF5AAAFF)),
+        focusedBorder: UnderlineInputBorder(
+          borderSide: BorderSide(color: colors.accent),
         ),
       ),
     );

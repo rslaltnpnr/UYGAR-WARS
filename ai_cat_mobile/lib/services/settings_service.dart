@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Ayarlari (API anahtari, kedi ismi, model adi) cihazda saklar.
@@ -13,6 +14,7 @@ class SettingsService {
   static const _keyDesktopPort = 'desktop_port';
   static const _keyDesktopPin = 'desktop_pin';
   static const _keyDesktopCertFingerprint = 'desktop_cert_fingerprint';
+  static const _keyThemeMode = 'theme_mode';
 
   final SharedPreferences _prefs;
 
@@ -46,4 +48,26 @@ class SettingsService {
       _prefs.getString(_keyDesktopCertFingerprint) ?? '';
   set desktopCertFingerprint(String value) =>
       _prefs.setString(_keyDesktopCertFingerprint, value);
+
+  /// Varsayilan 'dark' - uygulamanin onceki (tek secenekli) koyu gorunumunu
+  /// korur; kullanici acik moda ya da sistem temasina gecebilir.
+  ThemeMode get themeMode {
+    switch (_prefs.getString(_keyThemeMode)) {
+      case 'light':
+        return ThemeMode.light;
+      case 'system':
+        return ThemeMode.system;
+      default:
+        return ThemeMode.dark;
+    }
+  }
+
+  set themeMode(ThemeMode mode) {
+    final value = switch (mode) {
+      ThemeMode.light => 'light',
+      ThemeMode.system => 'system',
+      ThemeMode.dark => 'dark',
+    };
+    _prefs.setString(_keyThemeMode, value);
+  }
 }
