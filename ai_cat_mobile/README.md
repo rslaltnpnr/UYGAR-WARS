@@ -26,6 +26,14 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   uygulamasinin sag tik menusundeki "Uzaktan Kumanda Bilgisi"nden IP,
   port ve PIN'i alip bu panelde bir kez girmeniz yeterli. YouTube,
   YouTube Music, Spotify ve Google icin hazir baglanti butonlari da var.
+  Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
+  sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
+  parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere
+  benzer bir model) ve sonraki baglantilarda bu parmak izinin ayni
+  kalmasini dogrular; degisirse (olasi bir araya girme/MITM saldirisi)
+  baglanti reddedilir ve acik bir uyari gosterilir. Panelde "Sertifika
+  eslestirmesini sifirla" ile bu kaydi silip yeniden eslestirebilirsiniz
+  (orn. bilgisayar uygulamasi yeniden kurulduysa).
 
 ## 1) Gerekli araclari kurun (Windows)
 
@@ -97,10 +105,9 @@ flutter build apk --release --split-per-abi
   olarak saklanir (masaustu suruumundeki `config.json` ile ayni
   guvenlik seviyesi) - sifreli bir kasa degildir.
 - `AndroidManifest.xml`'e INTERNET (Gemini API ve uzaktan kumanda icin)
-  ve CAMERA (fotograf cekme icin) izinleri zaten eklenmis durumda.
-  Uzaktan kumanda bilgisayara duz HTTP (TLS'siz) ile baglandigi icin
-  `usesCleartextTraffic="true"` de ayarli - bu yalnizca ayni yerel agda
-  calisir, internetten disariya acik degildir.
+  ve CAMERA (fotograf cekme icin) izinleri zaten eklenmis durumda. Tum ag
+  trafigi HTTPS uzerinden gittigi icin `usesCleartextTraffic="false"`
+  (duz metin trafik kapali).
 - Bu, sistem geneli "her uygulamanin ustunde gezinen" bir overlay
   DEGILDIR; kedi yalnizca bu uygulama acikken, uygulamanin kendi
   ekraninda gezinir.
