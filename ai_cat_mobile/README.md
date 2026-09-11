@@ -72,6 +72,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   (ya da release sayfasini) tarayicida acar - kurulum icin "Bilinmeyen
   kaynaklardan yukleme" izni gerekebilir (masaustu suruumunun aksine,
   Android'de guvenlik nedeniyle otomatik arka plan kurulumu yapilmaz).
+- **Ana ekran widget'i**: Ayarlar penceresindeki "Ana Ekrana Widget Ekle"
+  ile (Android 8+, destekleyen baslaticilarda) "Sohbet" ve "Kumanda"
+  butonlarini tasiyan kucuk bir widget'i ana ekraniniza eklersiniz - her
+  ikisi de uygulamayi dogrudan ilgili panelle acar, tek dokunusla.
+  Desteklenmiyorsa ana ekranda bos bir alana uzun basip "Widget'lar"
+  menusunden elle de eklenebilir.
 
 ## 1) Gerekli araclari kurun (Windows)
 

@@ -3,6 +3,7 @@ import 'dart:io' show File;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,6 +14,7 @@ import '../services/history_service.dart';
 import '../services/reminder_service.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/cat_sprite.dart';
 import '../widgets/chat_sheet.dart';
@@ -51,8 +53,10 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _alertPollTimer;
   bool _polling = false;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
+  StreamSubscription<Uri?>? _widgetSub;
   String? _pendingSharedUrl;
   String? _pendingRestoreFilePath;
+  WidgetLaunchAction? _pendingWidgetAction;
 
   @override
   void initState() {
@@ -63,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
       (_) => _checkSleep(),
     );
     _initShareIntent();
+    _initHomeWidget();
     _alertPollTimer = Timer.periodic(
       _alertPollInterval,
       (_) => _pollForDesktopAlerts(),
@@ -89,6 +94,45 @@ class _HomeScreenState extends State<HomeScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _confirmAndRestoreBackup(pendingRestorePath);
       });
+    }
+    final pendingWidgetAction = _pendingWidgetAction;
+    if (pendingWidgetAction != null) {
+      _pendingWidgetAction = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _handleWidgetAction(pendingWidgetAction);
+      });
+    }
+  }
+
+  /// Ana ekran widget'indaki "Sohbet"/"Kumanda" dugmelerinden biriyle
+  /// uygulama acildiysa (soguk baslatma ya da uygulama zaten acikken)
+  /// ilgili paneli dogrudan acar.
+  void _initHomeWidget() {
+    HomeWidget.initiallyLaunchedFromHomeWidget().then(_handleWidgetUri);
+    _widgetSub = HomeWidget.widgetClicked.listen(
+      _handleWidgetUri,
+      onError: (_) {},
+    );
+  }
+
+  void _handleWidgetUri(Uri? uri) {
+    final action = WidgetService.actionFromUri(uri);
+    if (action == null) return;
+    if (_settings != null && mounted) {
+      _handleWidgetAction(action);
+    } else {
+      _pendingWidgetAction = action;
+    }
+  }
+
+  void _handleWidgetAction(WidgetLaunchAction action) {
+    switch (action) {
+      case WidgetLaunchAction.chat:
+        _openChat();
+        break;
+      case WidgetLaunchAction.remoteControl:
+        _openRemoteControl();
+        break;
     }
   }
 
@@ -195,6 +239,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _revertTimer?.cancel();
     _alertPollTimer?.cancel();
     _shareSub?.cancel();
+    _widgetSub?.cancel();
     super.dispose();
   }
 

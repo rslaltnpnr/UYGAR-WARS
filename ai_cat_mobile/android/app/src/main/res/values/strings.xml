@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_app_name">AI Kedi Asistanı</string>
+    <string name="widget_action_chat">Sohbet</string>
+    <string name="widget_action_remote">Kumanda</string>
+    <string name="widget_description">Sohbeti veya bilgisayar kumandasını tek dokunuşla açar.</string>
+</resources>

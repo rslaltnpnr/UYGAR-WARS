@@ -51,7 +51,25 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <data android:mimeType="application/json"/>
             </intent-filter>
+            <!-- Ana ekran widget'indaki bir dugmeye basildiginda uygulamayi
+                 acan intent (home_widget paketi tarafindan gonderilir). -->
+            <intent-filter>
+                <action android:name="es.antonborri.home_widget.action.LAUNCH"/>
+            </intent-filter>
         </activity>
+
+        <!-- Ana ekran widget'i: sohbeti/kumanda panelini dogrudan acan iki
+             hizli erisim dugmesi gosterir (bkz. CatWidgetProvider.kt). -->
+        <receiver
+            android:name=".CatWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/cat_widget_info"/>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
