@@ -81,6 +81,16 @@ karakteri (PyQt6).
   degistirilecek bir .exe olmadigindan otomatik kurulum atlanir. Henuz
   bir release yayinlanmamissa ya da internete erisim yoksa sessizce yok
   sayilir.
+- **Yedekleme / geri yukleme**: sag tik menusundeki "Yedek Al..." ile
+  ayarlarinizi (API anahtari, PIN dahil) ve sohbet gecmisinizi tek bir
+  JSON dosyasina kaydedebilir, "Yedekten Geri Yukle..." ile baska bir
+  bilgisayarda (ya da yeniden kurulumdan sonra) geri yukleyebilirsiniz.
+  Yedek dosyasi hassas bilgiler icerir - baskalariyla paylasmayin.
+- **Pano senkronizasyonu**: telefon uygulamasindan gonderilen metni
+  bilgisayarin panosuna yazabilir ya da bilgisayarin panosundaki metni
+  telefona cekebilirsiniz (ayni PIN+TLS korumali kanal uzerinden).
+- **Hakkinda**: sag tik menusundeki "Hakkinda" ile surum numarasini ve
+  proje deposunun linkini gorebilirsiniz.
 
 ## Kurulum ve calistirma
 

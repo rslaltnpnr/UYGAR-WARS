@@ -45,6 +45,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QFileDialog,
     QHBoxLayout,
     QInputDialog,
     QLineEdit,
@@ -492,6 +493,24 @@ MEDIA_KEY_NAMES = {
 
 POWER_ACTIONS = ("sleep", "lock")
 
+CLIPBOARD_ACTIONS = ("push", "pull")
+CLIPBOARD_MAX_LENGTH = 100_000
+
+
+def get_clipboard_text():
+    try:
+        return QApplication.clipboard().text()
+    except Exception:
+        return ""
+
+
+def set_clipboard_text(text):
+    try:
+        QApplication.clipboard().setText(text)
+        return True
+    except Exception:
+        return False
+
 
 def handle_media_action(action):
     """Windows'ta medya tuslarini simule eder (keyboard kutuphanesi
@@ -560,6 +579,7 @@ class RemoteCommandServer(QThread):
       POST /screenshot {"pin"}           - kucultulmus bir ekran goruntusu dondurur
       POST /history    {"pin"}               - sohbet gecmisini dondurur (telefona ice aktarmak icin)
       POST /alerts     {"pin", "since_id"}   - since_id'den sonraki hata/uyari bildirimlerini dondurur
+      POST /clipboard  {"pin", "action", "text"} - "push": panoyu text'e ayarlar, "pull": panoyu dondurur
     Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
     (ana/GUI thread'ine Qt tarafindan otomatik kuyruklanir) yayinlanir.
     """
@@ -625,6 +645,7 @@ class RemoteCommandServer(QThread):
                     "/screenshot",
                     "/history",
                     "/alerts",
+                    "/clipboard",
                 ):
                     self._send_json(404, {"error": "bulunamadi"})
                     return
@@ -697,6 +718,25 @@ class RemoteCommandServer(QThread):
 
                 if self.path == "/history":
                     self._send_json(200, {"status": "ok", "entries": history.entries})
+                    return
+
+                if self.path == "/clipboard":
+                    action = str(data.get("action", ""))
+                    if action not in CLIPBOARD_ACTIONS:
+                        self._send_json(400, {"error": "gecersiz eylem"})
+                        return
+                    if action == "push":
+                        text = str(data.get("text", ""))
+                        if len(text) > CLIPBOARD_MAX_LENGTH:
+                            self._send_json(400, {"error": "metin cok uzun"})
+                            return
+                        if not set_clipboard_text(text):
+                            self._send_json(500, {"error": "panoya yazilamadi"})
+                            return
+                        self._send_json(200, {"status": "ok"})
+                        return
+                    # action == "pull"
+                    self._send_json(200, {"status": "ok", "text": get_clipboard_text()})
                     return
 
                 # self.path == "/alerts"
@@ -1664,6 +1704,90 @@ class CatCharacter(QWidget):
         else:
             QMessageBox.information(self, "Hatirlatma", text)
 
+    # -- yedekleme / geri yukleme -------------------------------------------
+
+    def _export_backup(self):
+        self._register_activity()
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Yedek Al", "ai-kedi-asistani-yedek.json", "JSON Dosyalari (*.json)"
+        )
+        if not path:
+            return
+        backup = {
+            "config": self.config.data,
+            "history": self.history.entries,
+        }
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(backup, f, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            QMessageBox.warning(self, "Yedek Alinamadi", f"Yedek kaydedilemedi: {exc}")
+            return
+        QMessageBox.information(
+            self,
+            "Yedek Alindi",
+            f"Yedek kaydedildi:\n{path}\n\n"
+            "Not: Bu dosya Gemini API anahtarinizi ve uzaktan kumanda PIN'inizi "
+            "duz metin olarak icerir - baskalariyla paylasmayin.",
+        )
+
+    def _import_backup(self):
+        self._register_activity()
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Yedekten Geri Yukle", "", "JSON Dosyalari (*.json)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                backup = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Geri Yukleme Basarisiz", f"Dosya okunamadi: {exc}")
+            return
+        if not isinstance(backup, dict):
+            QMessageBox.warning(self, "Geri Yukleme Basarisiz", "Gecersiz yedek dosyasi.")
+            return
+
+        confirm = QMessageBox.question(
+            self,
+            "Geri Yukleme Onayi",
+            "Mevcut ayarlar ve sohbet gecmisi bu yedekle degistirilecek. Devam edilsin mi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+
+        config_data = backup.get("config")
+        if isinstance(config_data, dict):
+            self.config.data.update(config_data)
+            self.config.save()
+        history_data = backup.get("history")
+        if isinstance(history_data, list):
+            self.history.entries = history_data
+            self.history.save()
+            if self.history_dialog is not None:
+                self.history_dialog.refresh()
+
+        QMessageBox.information(
+            self,
+            "Geri Yuklendi",
+            "Yedek geri yuklendi. Degisikliklerin tam olarak yansimasi icin "
+            "uygulamayi yeniden baslatmaniz onerilir.",
+        )
+
+    # -- hakkinda -------------------------------------------------------
+
+    def _show_about(self):
+        self._register_activity()
+        QMessageBox.about(
+            self,
+            "Hakkinda",
+            f"<b>AI Kedi Asistani</b><br>"
+            f"Surum {APP_VERSION}<br><br>"
+            "Google Gemini destekli, masaustunde gezinen bir kedi asistani.<br><br>"
+            f'<a href="https://github.com/{GITHUB_REPO}">GitHub deposu</a>',
+        )
+
     # -- guncelleme kontrolu ----------------------------------------------
 
     def _check_for_updates(self, manual=False):
@@ -1868,6 +1992,22 @@ class CatCharacter(QWidget):
         update_action = QAction("Guncellemeleri Kontrol Et", self)
         update_action.triggered.connect(lambda: self._check_for_updates(manual=True))
         menu.addAction(update_action)
+
+        menu.addSeparator()
+
+        backup_action = QAction("Yedek Al...", self)
+        backup_action.triggered.connect(self._export_backup)
+        menu.addAction(backup_action)
+
+        restore_action = QAction("Yedekten Geri Yukle...", self)
+        restore_action.triggered.connect(self._import_backup)
+        menu.addAction(restore_action)
+
+        menu.addSeparator()
+
+        about_action = QAction("Hakkinda", self)
+        about_action.triggered.connect(self._show_about)
+        menu.addAction(about_action)
 
         menu.addSeparator()
         exit_action = QAction("Cikis", self)
