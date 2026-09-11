@@ -4,6 +4,8 @@ remote_cert.pem
 remote_key.pem
 crash.log
 .last_crash
+AI-Kedi-Asistani-new.exe
+_ai_kedi_update.bat
 __pycache__/
 *.pyc
 build/
