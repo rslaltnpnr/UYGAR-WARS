@@ -45,6 +45,15 @@ class HistoryFetchResult {
   const HistoryFetchResult(this.fingerprint, this.entries);
 }
 
+/// [fetchAlerts] sonucu: parmak izinin yani sira `since_id`'den sonraki
+/// hata/uyari kayitlarini (id, time, message) tasir.
+class AlertsFetchResult {
+  final String fingerprint;
+  final List<Map<String, dynamic>> alerts;
+
+  const AlertsFetchResult(this.fingerprint, this.alerts);
+}
+
 class _RawResponse {
   final int statusCode;
   final String body;
@@ -281,6 +290,30 @@ class RemoteControlService {
       return HistoryFetchResult(response.fingerprint, entries);
     } catch (_) {
       throw RemoteControlException('Geçmiş okunamadı.');
+    }
+  }
+
+  Future<AlertsFetchResult> fetchAlerts({
+    required String ip,
+    required int port,
+    required String pin,
+    required String pinnedFingerprint,
+    required int sinceId,
+  }) async {
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/alerts',
+      body: {'pin': pin, 'since_id': sinceId},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      final alerts = List<Map<String, dynamic>>.from(data['alerts'] as List);
+      return AlertsFetchResult(response.fingerprint, alerts);
+    } catch (_) {
+      throw RemoteControlException('Uyarılar okunamadı.');
     }
   }
 

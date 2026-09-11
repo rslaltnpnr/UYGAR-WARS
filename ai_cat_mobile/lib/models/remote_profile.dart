@@ -8,6 +8,11 @@ class RemoteProfile {
   final String pin;
   final String certFingerprint;
 
+  /// Bu bilgisayardan alinan hata/uyari bildirimlerinde en son gorulen
+  /// kaydin id'si - /alerts yoklamasinda ayni bildirimi tekrar
+  /// gostermemek icin.
+  final int lastAlertId;
+
   const RemoteProfile({
     required this.id,
     required this.name,
@@ -15,6 +20,7 @@ class RemoteProfile {
     required this.port,
     required this.pin,
     required this.certFingerprint,
+    this.lastAlertId = 0,
   });
 
   RemoteProfile copyWith({
@@ -23,6 +29,7 @@ class RemoteProfile {
     int? port,
     String? pin,
     String? certFingerprint,
+    int? lastAlertId,
   }) {
     return RemoteProfile(
       id: id,
@@ -31,6 +38,7 @@ class RemoteProfile {
       port: port ?? this.port,
       pin: pin ?? this.pin,
       certFingerprint: certFingerprint ?? this.certFingerprint,
+      lastAlertId: lastAlertId ?? this.lastAlertId,
     );
   }
 
@@ -41,6 +49,7 @@ class RemoteProfile {
         'port': port,
         'pin': pin,
         'certFingerprint': certFingerprint,
+        'lastAlertId': lastAlertId,
       };
 
   factory RemoteProfile.fromJson(Map<String, dynamic> json) => RemoteProfile(
@@ -50,5 +59,6 @@ class RemoteProfile {
         port: json['port'] as int? ?? 8765,
         pin: json['pin'] as String? ?? '',
         certFingerprint: json['certFingerprint'] as String? ?? '',
+        lastAlertId: json['lastAlertId'] as int? ?? 0,
       );
 }

@@ -8,6 +8,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_entry.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
+import '../services/reminder_service.dart';
+import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/cat_sprite.dart';
@@ -31,7 +33,11 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _revertAfter = Duration(seconds: 4);
   static const _catSize = 96.0;
 
+  static const _alertPollInterval = Duration(seconds: 45);
+
   final _gemini = GeminiService();
+  final _remoteService = RemoteControlService();
+  final _notifications = ReminderService();
 
   SettingsService? _settings;
   HistoryService? _history;
@@ -40,6 +46,8 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _lastActivity = DateTime.now();
   Timer? _sleepCheckTimer;
   Timer? _revertTimer;
+  Timer? _alertPollTimer;
+  bool _polling = false;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
   String? _pendingSharedUrl;
 
@@ -52,6 +60,10 @@ class _HomeScreenState extends State<HomeScreen> {
       (_) => _checkSleep(),
     );
     _initShareIntent();
+    _alertPollTimer = Timer.periodic(
+      _alertPollInterval,
+      (_) => _pollForDesktopAlerts(),
+    );
   }
 
   Future<void> _init() async {
@@ -104,8 +116,64 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _sleepCheckTimer?.cancel();
     _revertTimer?.cancel();
+    _alertPollTimer?.cancel();
     _shareSub?.cancel();
     super.dispose();
+  }
+
+  /// Eslesik (aktif) bilgisayarda bir hata/uyari olustuysa yerel bildirim
+  /// olarak gosterir. Yalnizca uygulama acikken calisir (bulut/Firebase
+  /// push gerektirmez) - bilgisayara ulasilamazsa sessizce yok sayar,
+  /// boylece bilgisayar kapaliyken/ag disindayken kullaniciyi rahatsiz
+  /// eden tekrarlayan hatalar gostermez.
+  Future<void> _pollForDesktopAlerts() async {
+    if (_polling) return;
+    final settings = _settings;
+    if (settings == null) return;
+    final profiles = settings.remoteProfiles;
+    if (profiles.isEmpty) return;
+    final activeId = settings.activeProfileId;
+    final profile = profiles.firstWhere(
+      (p) => p.id == activeId,
+      orElse: () => profiles.first,
+    );
+    if (profile.ip.isEmpty || profile.pin.isEmpty) return;
+
+    _polling = true;
+    try {
+      final result = await _remoteService.fetchAlerts(
+        ip: profile.ip,
+        port: profile.port,
+        pin: profile.pin,
+        pinnedFingerprint: profile.certFingerprint,
+        sinceId: profile.lastAlertId,
+      );
+      var maxId = profile.lastAlertId;
+      for (final alert in result.alerts) {
+        final id = alert['id'] as int? ?? maxId;
+        if (id > maxId) maxId = id;
+        final message = alert['message'] as String? ?? '';
+        if (message.isEmpty) continue;
+        await _notifications.showAlert(
+          title: '${profile.name} - Uyarı',
+          message: message,
+        );
+      }
+      settings.remoteProfiles = profiles
+          .map(
+            (p) => p.id == profile.id
+                ? p.copyWith(
+                    certFingerprint: result.fingerprint,
+                    lastAlertId: maxId,
+                  )
+                : p,
+          )
+          .toList();
+    } catch (_) {
+      // bilgisayar kapali/ag disinda olabilir - sessizce yok say
+    } finally {
+      _polling = false;
+    }
   }
 
   void _registerActivity() {

@@ -24,7 +24,10 @@ karakteri (PyQt6).
   isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim
   sistemlerinde bu komutlar sessizce hicbir sey yapmaz). Telefon
   uygulamasi ayrica bu bilgisayarin sohbet gecmisini **ice aktarabilir**
-  (sohbet panelindeki bulut simgesi).
+  (sohbet panelindeki bulut simgesi). Bir Gemini hatasi olustugunda bu,
+  telefonun periyodik olarak yokladigi (poll) bir uyari kuyruguna
+  eklenir - telefon uygulamasi acikken bu hatalar icin **yerel bildirim**
+  gosterilir (bulut/Firebase gerekmez, sadece ayni Wi-Fi agi).
   - Sunucu **HTTPS (TLS)** uzerinden calisir; ilk calistirmada otomatik
     olarak kendinden imzali bir sertifika (`remote_cert.pem`/
     `remote_key.pem`, `.gitignore`'da - asla paylasmayin/commitlemeyin)
