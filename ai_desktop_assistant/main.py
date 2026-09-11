@@ -22,8 +22,10 @@ import os
 import random
 import socket
 import ssl
+import subprocess
 import sys
 import time
+import traceback
 import webbrowser
 from urllib.parse import urlparse
 from datetime import datetime
@@ -78,6 +80,72 @@ HISTORY_PATH = os.path.join(base_dir(), "chat_history.json")
 ASSETS_DIR = resource_path("assets")
 MAX_HISTORY_ENTRIES = 200
 
+
+# --------------------------------------------------------------------------
+# Coken durumda log tutma + otomatik yeniden baslatma
+# --------------------------------------------------------------------------
+
+CRASH_LOG_PATH = os.path.join(base_dir(), "crash.log")
+CRASH_MARKER_PATH = os.path.join(base_dir(), ".last_crash")
+MIN_RESTART_INTERVAL_SECONDS = 10  # bundan kisa arayla ust uste cokerse
+# yeniden baslatmayi durdurur (baslangicta patlayan bir hatanin sonsuz
+# dongude bilgisayari yormasini onlemek icin)
+
+
+def _restart_command():
+    if getattr(sys, "frozen", False):
+        return [sys.executable]
+    return [sys.executable, os.path.abspath(__file__)]
+
+
+def _log_crash(exc_type, exc_value, exc_tb):
+    try:
+        with open(CRASH_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(f"\n--- {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+    except OSError:
+        pass
+
+
+def _should_auto_restart():
+    now = time.time()
+    last = None
+    try:
+        with open(CRASH_MARKER_PATH, "r", encoding="utf-8") as f:
+            last = float(f.read().strip())
+    except (OSError, ValueError):
+        pass
+    try:
+        with open(CRASH_MARKER_PATH, "w", encoding="utf-8") as f:
+            f.write(str(now))
+    except OSError:
+        pass
+    return last is None or (now - last) > MIN_RESTART_INTERVAL_SECONDS
+
+
+def install_crash_handler():
+    """
+    Beklenmeyen bir hata GUI thread'inden disari sizarsa (PyQt6 normalde
+    bunu yakalayip sys.excepthook'a yonlendirir) traceback'i crash.log'a
+    yazar ve uygulamayi kendini yeniden baslatarak kurtarmaya calisir.
+    Cok kisa arayla ust uste cokerse (baslangic hatasi dongusu) tekrar
+    baslatmaz - kullanici crash.log'u inceleyip sorunu gormelidir.
+    """
+
+    def handle_exception(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        _log_crash(exc_type, exc_value, exc_tb)
+        if _should_auto_restart():
+            try:
+                subprocess.Popen(_restart_command(), close_fds=True)
+            except OSError:
+                pass
+        os._exit(1)
+
+    sys.excepthook = handle_exception
+
 SLEEP_AFTER_MS = 3 * 60 * 1000  # 3 dakika hareketsizlikten sonra uyku
 REVERT_TO_NORMAL_MS = 4000  # smile/fear gosterildikten sonra norm'a donus
 
@@ -100,6 +168,10 @@ REMOTE_SERVER_PORT = 8765
 REMOTE_MAX_FAILED_ATTEMPTS = 5
 REMOTE_LOCKOUT_SECONDS = 60
 
+APP_VERSION = "1.1.0"
+GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
+UPDATE_CHECK_TIMEOUT_SECONDS = 5
+
 DEFAULT_CONFIG = {
     "character_name": "Fuff",
     "gemini_api_key": "",
@@ -109,6 +181,8 @@ DEFAULT_CONFIG = {
     "pos_x": None,
     "pos_y": None,
     "remote_pin": None,
+    "gemini_request_date": None,
+    "gemini_request_count": 0,
 }
 
 
@@ -157,6 +231,24 @@ class ConfigManager:
     def set(self, key, value):
         self.data[key] = value
         self.save()
+
+    def register_gemini_request(self):
+        """Gunluk soru sayacini bir arttirir (gun degistiyse once sifirlar)
+        ve yeni degeri dondurur - kullaniciya gunde kac istek gonderdigini
+        gostermek icin (Gemini ucretsiz kotasi gunluktur)."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if self.data.get("gemini_request_date") != today:
+            self.data["gemini_request_date"] = today
+            self.data["gemini_request_count"] = 0
+        self.data["gemini_request_count"] += 1
+        self.save()
+        return self.data["gemini_request_count"]
+
+    def gemini_request_count_today(self):
+        today = datetime.now().strftime("%Y-%m-%d")
+        if self.data.get("gemini_request_date") != today:
+            return 0
+        return self.data.get("gemini_request_count", 0)
 
 
 # --------------------------------------------------------------------------
@@ -494,6 +586,72 @@ class RemoteCommandServer(QThread):
 
 
 # --------------------------------------------------------------------------
+# Guncelleme kontrolu (GitHub Releases)
+# --------------------------------------------------------------------------
+
+def _parse_version(text):
+    """'v1.2.0' -> (1, 2, 0) gibi karsilastirilabilir bir tuple uretir;
+    ayristirilamayan parcalar 0 sayilir."""
+    text = text.strip()
+    if text.lower().startswith("v"):
+        text = text[1:]
+    parts = []
+    for piece in text.split("."):
+        digits = "".join(ch for ch in piece if ch.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
+
+
+def is_newer_version(remote_version, local_version):
+    try:
+        return _parse_version(remote_version) > _parse_version(local_version)
+    except (ValueError, TypeError):
+        return False
+
+
+class UpdateCheckWorker(QThread):
+    """
+    GitHub Releases API'sinden en son surumu sorar. Henuz hic release
+    yayinlanmamissa (404) ya da ag erisimi yoksa sessizce hicbir sey
+    yapmaz - bu, mevcut kurulumu bozmayan, tamamen opsiyonel bir kontrol.
+    """
+
+    update_available = pyqtSignal(str, str)  # tag_name, html_url
+    check_finished = pyqtSignal(bool, str)  # basarili mi, hata mesaji (varsa)
+
+    def run(self):
+        try:
+            import urllib.error
+            import urllib.request
+
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "ai-kedi-asistani-update-check",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=UPDATE_CHECK_TIMEOUT_SECONDS) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                self.check_finished.emit(True, "")  # henuz release yayinlanmamis
+            else:
+                self.check_finished.emit(False, f"HTTP {exc.code}")
+            return
+        except Exception as exc:
+            self.check_finished.emit(False, str(exc))
+            return
+
+        tag = str(data.get("tag_name", "")).strip()
+        html_url = str(data.get("html_url", "")).strip()
+        if tag and is_newer_version(tag, APP_VERSION):
+            self.update_available.emit(tag, html_url)
+        self.check_finished.emit(True, "")
+
+
+# --------------------------------------------------------------------------
 # Windows ile otomatik baslatma (baslangic klasoru yerine Run registry anahtari)
 # --------------------------------------------------------------------------
 
@@ -771,6 +929,17 @@ class ChatBubble(QWidget):
         input_row.addWidget(self.ask_button)
         layout.addLayout(input_row)
 
+        self.request_count_label = QPushButton("")
+        self.request_count_label.setEnabled(False)
+        self.request_count_label.setStyleSheet(
+            "background: transparent; color: rgba(255,255,255,140); "
+            "font-size: 10px; text-align: left; border: none; padding: 0;"
+        )
+        layout.addWidget(self.request_count_label)
+
+    def set_request_count(self, count):
+        self.request_count_label.setText(f"Bugun gonderilen istek: {count}")
+
     def _on_ask(self):
         text = self.input_field.text().strip()
         if not text:
@@ -942,6 +1111,11 @@ class CatCharacter(QWidget):
         self.tray_icon = None
         self._setup_tray_icon()
 
+        self.update_worker = None
+        self._update_check_manual = False
+        self._last_update_info = None
+        QTimer.singleShot(3000, lambda: self._check_for_updates(manual=False))
+
     # -- gorsel yukleme / olcekleme -------------------------------------
 
     def _load_pixmaps(self):
@@ -1035,6 +1209,7 @@ class CatCharacter(QWidget):
         if self.bubble is None:
             self.bubble = ChatBubble(self.config.get("character_name"))
             self.bubble.ask_requested.connect(self._handle_question)
+            self.bubble.set_request_count(self.config.gemini_request_count_today())
 
         bubble_x = self.x() + self.width() // 2 - self.bubble.width() // 2
         bubble_y = self.y() - self.bubble.height() - 10
@@ -1075,6 +1250,7 @@ class CatCharacter(QWidget):
         self.revert_timer.stop()
         self._set_state("stern")
         self.bubble.show_thinking()
+        self.bubble.set_request_count(self.config.register_gemini_request())
         self._pending_question = question
 
         self.worker = GeminiWorker(
@@ -1146,6 +1322,48 @@ class CatCharacter(QWidget):
         if box.clickedButton() == regen_button:
             self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
             self._show_remote_info()
+
+    # -- guncelleme kontrolu ----------------------------------------------
+
+    def _check_for_updates(self, manual=False):
+        if self.update_worker is not None and self.update_worker.isRunning():
+            return
+        self._update_check_manual = manual
+        self._last_update_info = None
+        self.update_worker = UpdateCheckWorker(self)
+        self.update_worker.update_available.connect(self._on_update_available)
+        self.update_worker.check_finished.connect(self._on_update_check_finished)
+        self.update_worker.start()
+
+    def _on_update_available(self, tag, html_url):
+        self._last_update_info = (tag, html_url)
+        if not self._update_check_manual and self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                "Yeni surum mevcut",
+                f"AI Kedi Asistani {tag} yayinlandi. GitHub'dan indirebilirsiniz.",
+                QSystemTrayIcon.MessageIcon.Information,
+                8000,
+            )
+
+    def _on_update_check_finished(self, success, error_message):
+        if not self._update_check_manual:
+            return
+        if not success:
+            QMessageBox.warning(
+                self, "Guncelleme Kontrolu", f"Guncelleme kontrol edilemedi: {error_message}"
+            )
+            return
+        if self._last_update_info is not None:
+            tag, html_url = self._last_update_info
+            QMessageBox.information(
+                self,
+                "Guncelleme Mevcut",
+                f"Yeni surum mevcut: {tag} (su an: {APP_VERSION})\n\n{html_url}",
+            )
+        else:
+            QMessageBox.information(
+                self, "Guncelleme Kontrolu", f"Kullandiginiz surum guncel ({APP_VERSION})."
+            )
 
     # -- sistem tepsisi -------------------------------------------------------
 
@@ -1240,6 +1458,10 @@ class CatCharacter(QWidget):
         autostart_action.toggled.connect(self._toggle_autostart)
         menu.addAction(autostart_action)
 
+        update_action = QAction("Guncellemeleri Kontrol Et", self)
+        update_action.triggered.connect(lambda: self._check_for_updates(manual=True))
+        menu.addAction(update_action)
+
         menu.addSeparator()
         exit_action = QAction("Cikis", self)
         exit_action.triggered.connect(QApplication.instance().quit)
@@ -1302,6 +1524,7 @@ class CatCharacter(QWidget):
 # --------------------------------------------------------------------------
 
 def main():
+    install_crash_handler()
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
 

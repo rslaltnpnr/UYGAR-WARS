@@ -50,7 +50,18 @@ karakteri (PyQt6).
 - Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; kedi
   "dusunme" gorseline gecer, `mss` ile ekran goruntusu alir, Gemini Flash
   modeline (goruntu + soru) gonderir ve yaniti balonda gosterir. Tum bu
-  islem arka plan thread'inde (QThread) calisir, arayuz donmaz.
+  islem arka plan thread'inde (QThread) calisir, arayuz donmaz. Balonun
+  altinda o gun gonderilen istek sayisi gosterilir (Gemini'nin ucretsiz
+  kotasi gunluktur).
+- **Guvenilirlik**: beklenmeyen bir hata olursa traceback `crash.log`'a
+  yazilir ve uygulama kendini otomatik olarak yeniden baslatir (cok kisa
+  arayla ust uste cokerse - baslangic hatasi dongusu - tekrar baslatmaz,
+  `crash.log`'u incelemeniz gerekir).
+- **Guncelleme kontrolu**: acilista GitHub Releases'ten yeni bir surum
+  olup olmadigi sessizce kontrol edilir (bulunursa sistem tepsisinden
+  bildirim gosterilir); sag tik menusundeki "Guncellemeleri Kontrol Et"
+  ile istediginiz zaman elle de kontrol edebilirsiniz. Henuz bir release
+  yayinlanmamissa ya da internete erisim yoksa sessizce yok sayilir.
 
 ## Kurulum ve calistirma
 
