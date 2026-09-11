@@ -16,13 +16,16 @@ yer alir.
 
 import hmac
 import http.server
+import ipaddress
 import json
 import os
 import random
 import socket
+import ssl
 import sys
 import time
 import webbrowser
+from urllib.parse import urlparse
 from datetime import datetime
 
 from PyQt6.QtCore import QObject, QPoint, Qt, QThread, QTimer, pyqtSignal
@@ -264,6 +267,121 @@ def get_local_ip():
         return "127.0.0.1"
 
 
+REMOTE_CERT_PATH = os.path.join(base_dir(), "remote_cert.pem")
+REMOTE_KEY_PATH = os.path.join(base_dir(), "remote_key.pem")
+
+
+def _generate_self_signed_cert():
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "AI Kedi Asistani Uzaktan Kumanda")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - datetime.timedelta(days=1))
+        .not_valid_after(now + datetime.timedelta(days=3650))
+        .sign(key, hashes.SHA256())
+    )
+
+    key_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    with open(REMOTE_KEY_PATH, "wb") as f:
+        f.write(key_pem)
+    with open(REMOTE_CERT_PATH, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+
+
+def ensure_remote_tls_cert():
+    """
+    Uzaktan kumanda sunucusu icin kendinden imzali bir TLS sertifikasi/
+    anahtari yoksa uretir; boylece PIN ve komutlar ag uzerinde duz metin
+    degil sifreli gider (baskasi ayni Wi-Fi'de paketleri dinleyemez).
+    Sertifika bir Yetkili Kurum tarafindan imzali olmadigindan telefon
+    tarafi "ilk baglantida guven" (TOFU) modeliyle parmak izini sabitler.
+    """
+    if os.path.exists(REMOTE_CERT_PATH) and os.path.exists(REMOTE_KEY_PATH):
+        return True
+    try:
+        _generate_self_signed_cert()
+        return True
+    except Exception:
+        return False
+
+
+def get_cert_fingerprint():
+    """Sertifikanin SHA-256 parmak izini 'AA:BB:...' biciminde dondurur."""
+    try:
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes
+
+        with open(REMOTE_CERT_PATH, "rb") as f:
+            cert = x509.load_pem_x509_certificate(f.read())
+        digest = cert.fingerprint(hashes.SHA256()).hex()
+        return ":".join(digest[i : i + 2] for i in range(0, len(digest), 2)).upper()
+    except Exception:
+        return None
+
+
+def is_url_safe_to_open(url):
+    """
+    PIN sizarsa bile telefon uzerinden bilgisayarin yerel agindaki
+    router/IoT/localhost panellerine yonlendirme (SSRF benzeri kotuye
+    kullanim) yapilamamasi icin: yalnizca genel (ozel olmayan) IP'lere
+    cozumlenen http(s) adreslerine izin verilir.
+
+    Not: Bu, hedef host adini simdi cozup kontrol eder; gelismis bir
+    saldirgan DNS rebinding ile bu kontrolden sonra farkli bir IP'ye
+    yonlendirebilir - webbrowser.open() tarayiciya devrettigi icin bu
+    katmanda tam engellenemez. Buradaki amac, PIN'i ele geciren birinin
+    dogrudan "http://192.168.1.1/..." gibi bariz yerel adresler
+    yazmasini engellemektir.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    hostname = parsed.hostname
+    if not hostname or hostname.lower() == "localhost":
+        return False
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except OSError:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        raw_addr = info[4][0].split("%")[0]
+        try:
+            ip_obj = ipaddress.ip_address(raw_addr)
+        except ValueError:
+            return False
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or ip_obj.is_unspecified
+        ):
+            return False
+    return True
+
+
 class RemoteCommandServer(QThread):
     """
     Telefon uygulamasindan POST /open ile ("pin", "url") alan basit bir
@@ -336,19 +454,39 @@ class RemoteCommandServer(QThread):
                 failed_attempts.pop(client_ip, None)
 
                 url = str(data.get("url", "")).strip()
-                if not url.startswith(("http://", "https://")):
-                    self._send_json(400, {"error": "gecersiz url"})
+                if not is_url_safe_to_open(url):
+                    self._send_json(400, {"error": "gecersiz veya guvensiz url"})
                     return
 
                 signal.emit(url)
                 self._send_json(200, {"status": "ok"})
 
+        if not ensure_remote_tls_cert():
+            return  # sertifika olusturulamadi - uzaktan kumanda olmadan devam et
+
+        bind_ip = get_local_ip() or "0.0.0.0"
         try:
-            self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", REMOTE_SERVER_PORT), Handler)
-            self._httpd.daemon_threads = True
+            self._httpd = http.server.ThreadingHTTPServer((bind_ip, REMOTE_SERVER_PORT), Handler)
+        except OSError:
+            try:
+                self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", REMOTE_SERVER_PORT), Handler)
+            except OSError:
+                return
+
+        try:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(REMOTE_CERT_PATH, REMOTE_KEY_PATH)
+            self._httpd.socket = ssl_context.wrap_socket(self._httpd.socket, server_side=True)
+        except (ssl.SSLError, OSError):
+            self._httpd.server_close()
+            self._httpd = None
+            return
+
+        self._httpd.daemon_threads = True
+        try:
             self._httpd.serve_forever()
         except OSError:
-            pass  # port kullanimda vb. - uygulama uzaktan kumanda olmadan calismaya devam eder
+            pass  # sunucu kapatildi vb.
 
     def stop(self):
         if self._httpd is not None:
@@ -984,14 +1122,23 @@ class CatCharacter(QWidget):
         self._register_activity()
         ip = get_local_ip()
         pin = self.config.get("remote_pin")
+        fingerprint = get_cert_fingerprint()
+        fingerprint_line = (
+            f"Sertifika Parmak Izi (SHA-256): {fingerprint}\n"
+            if fingerprint
+            else ""
+        )
         box = QMessageBox(self)
         box.setWindowTitle("Uzaktan Kumanda")
         box.setText(
             "Telefon uygulamasindaki \"Bilgisayari Kumanda Et\" bolumune "
-            "bu bilgileri girin (ikisi de ayni Wi-Fi agina bagli olmali):\n\n"
+            "bu bilgileri girin (ikisi de ayni Wi-Fi agina bagli olmali). "
+            "Baglanti HTTPS (TLS) ile sifrelenir; telefon ilk baglantida "
+            "asagidaki parmak izini kaydedip sonraki baglantilarda dogrular:\n\n"
             f"IP Adresi: {ip}\n"
             f"Port: {REMOTE_SERVER_PORT}\n"
-            f"PIN: {pin}"
+            f"PIN: {pin}\n"
+            f"{fingerprint_line}"
         )
         regen_button = box.addButton("PIN'i Yenile", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Close)

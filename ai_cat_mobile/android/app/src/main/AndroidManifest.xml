@@ -4,14 +4,14 @@
     <!-- Sohbet panelinden fotograf cekebilmek icin (image_picker). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
-    <!-- Bilgisayardaki "Uzaktan Kumanda" ozelligi ayni yerel agdaki
-         duz HTTP (TLS'siz) sunucuya baglanir; bu yuzden cleartext
-         trafik acik olmali. -->
+    <!-- Tum ag trafigi (Gemini API + bilgisayardaki "Uzaktan Kumanda"
+         ozelligi) artik HTTPS uzerinden gider; duz metin (cleartext)
+         trafige izin verilmiyor. -->
     <application
         android:label="AI Kedi Asistani"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -16,10 +16,26 @@ karakteri (PyQt6).
 - **Uzaktan kumanda**: `ai_cat_mobile` (Android) uygulamasindan ayni
   Wi-Fi agi uzerinden bir baglanti gonderip bilgisayarda acilmasini
   saglayabilirsiniz (orn. bir YouTube linki -> muzik/video calar).
-  Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port ve PIN'i gorursunuz;
-  bunlari telefon uygulamasindaki "Bilgisayari Kumanda Et" panelinde
-  bir kez girmeniz yeterli. PIN yanlissa istek reddedilir; ust uste 5
-  yanlis denemeden sonra o IP 60 saniye kilitlenir (kaba kuvvet korumasi).
+  Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port, PIN ve sertifika
+  parmak izini gorursunuz; bunlari telefon uygulamasindaki "Bilgisayari
+  Kumanda Et" panelinde bir kez girmeniz yeterli.
+  - Sunucu **HTTPS (TLS)** uzerinden calisir; ilk calistirmada otomatik
+    olarak kendinden imzali bir sertifika (`remote_cert.pem`/
+    `remote_key.pem`, `.gitignore`'da - asla paylasmayin/commitlemeyin)
+    olusturulur. Telefon tarafinda "ilk baglantida guven" (TOFU) modeliyle
+    sertifikanin parmak izi kaydedilir; sonradan degisirse (olasi bir
+    araya girme/MITM saldirisi) baglanti reddedilir.
+  - Acilacak URL'ler **SSRF korumasindan** gecer: hedef adres ozel/yerel
+    ag (`192.168.x.x`, `10.x.x.x`), loopback (`127.0.0.1`), link-local
+    veya benzeri ayrilmis bir IP'ye cozumleniyorsa istek reddedilir - bu
+    sayede sizinle ayni agdaki biri PIN'i ele gecirse bile bunu
+    yonlendiricinizin yonetim paneline ya da yerel bir servise erismek
+    icin kullanamaz.
+  - Sunucu, mumkunse `0.0.0.0` yerine sadece bilgisayarin gercek yerel ag
+    arayuzune baglanir (agdaki gereksiz erisimi azaltmak icin).
+  - PIN yanlissa istek reddedilir; ust uste 5 yanlis denemeden sonra o IP
+    60 saniye kilitlenir (kaba kuvvet korumasi); PIN karsilastirmasi
+    zamanlama yan kanal saldirilarina karsi sabit-zamanlidir.
 - **Sistem tepsisi**: pencereyi kapatmadan simge durumuna alabilirsiniz;
   tepsi simgesine tiklayinca kedi geri gelir.
 - **Windows ile otomatik baslatma**: sag tik menusundeki "Windows ile

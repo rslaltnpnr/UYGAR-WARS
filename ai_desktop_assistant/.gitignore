@@ -1,5 +1,7 @@
 config.json
 chat_history.json
+remote_cert.pem
+remote_key.pem
 __pycache__/
 *.pyc
 build/

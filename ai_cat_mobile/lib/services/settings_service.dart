@@ -12,6 +12,7 @@ class SettingsService {
   static const _keyDesktopIp = 'desktop_ip';
   static const _keyDesktopPort = 'desktop_port';
   static const _keyDesktopPin = 'desktop_pin';
+  static const _keyDesktopCertFingerprint = 'desktop_cert_fingerprint';
 
   final SharedPreferences _prefs;
 
@@ -37,4 +38,12 @@ class SettingsService {
 
   String get desktopPin => _prefs.getString(_keyDesktopPin) ?? '';
   set desktopPin(String value) => _prefs.setString(_keyDesktopPin, value);
+
+  /// Ilk baglantida (TOFU) kaydedilen sunucu TLS sertifikasinin SHA-256
+  /// parmak izi. Sonraki baglantilarda bununla karsilastirilir; bos ise
+  /// henuz eslestirme yapilmamis demektir.
+  String get desktopCertFingerprint =>
+      _prefs.getString(_keyDesktopCertFingerprint) ?? '';
+  set desktopCertFingerprint(String value) =>
+      _prefs.setString(_keyDesktopCertFingerprint, value);
 }

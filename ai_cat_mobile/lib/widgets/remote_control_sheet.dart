@@ -60,6 +60,15 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     widget.settings.desktopPin = _pinController.text.trim();
   }
 
+  void _resetCertificatePairing() {
+    widget.settings.desktopCertFingerprint = '';
+    setState(() {
+      _status = 'Sertifika eşleştirmesi sıfırlandı. Bir sonraki bağlantıda '
+          'yeniden kaydedilecek.';
+      _statusIsError = false;
+    });
+  }
+
   Future<void> _send() async {
     if (_busy) return;
     _saveConnectionInfo();
@@ -68,12 +77,14 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
       _status = null;
     });
     try {
-      await _service.openUrl(
+      final result = await _service.openUrl(
         ip: widget.settings.desktopIp,
         port: widget.settings.desktopPort,
         pin: widget.settings.desktopPin,
         url: _urlController.text,
+        pinnedFingerprint: widget.settings.desktopCertFingerprint,
       );
+      widget.settings.desktopCertFingerprint = result.fingerprint;
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi! Bilgisayarda açılması lazım.';
@@ -149,6 +160,18 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                 ),
                 const SizedBox(height: 10),
                 _field(_pinController, 'PIN'),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: _resetCertificatePairing,
+                    icon: const Icon(Icons.lock_reset,
+                        size: 16, color: Colors.white54),
+                    label: const Text(
+                      'Sertifika eşleştirmesini sıfırla',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                  ),
+                ),
                 const Divider(color: Colors.white24, height: 32),
                 _field(_urlController, 'Açılacak bağlantı (https://...)'),
                 const SizedBox(height: 10),
