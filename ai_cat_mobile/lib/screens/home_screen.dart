@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_entry.dart';
+import '../services/backup_service.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
 import '../services/reminder_service.dart';
@@ -50,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _polling = false;
   StreamSubscription<List<SharedMediaFile>>? _shareSub;
   String? _pendingSharedUrl;
+  String? _pendingRestoreFilePath;
 
   @override
   void initState() {
@@ -80,6 +83,13 @@ class _HomeScreenState extends State<HomeScreen> {
         if (mounted) _openRemoteControl(initialUrl: pendingUrl);
       });
     }
+    final pendingRestorePath = _pendingRestoreFilePath;
+    if (pendingRestorePath != null) {
+      _pendingRestoreFilePath = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _confirmAndRestoreBackup(pendingRestorePath);
+      });
+    }
   }
 
   /// Baska bir uygulamadan (orn. YouTube) "Paylas" ile bir link
@@ -97,6 +107,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleSharedFiles(List<SharedMediaFile> files) {
     if (files.isEmpty) return;
+
+    final backupFile = files.cast<SharedMediaFile?>().firstWhere(
+      (f) =>
+          f!.mimeType == 'application/json' ||
+          f.path.toLowerCase().endsWith('.json'),
+      orElse: () => null,
+    );
+    if (backupFile != null) {
+      if (_settings != null && mounted) {
+        _confirmAndRestoreBackup(backupFile.path);
+      } else {
+        _pendingRestoreFilePath = backupFile.path;
+      }
+      return;
+    }
+
     final shared = files.firstWhere(
       (f) => f.type == SharedMediaType.text || f.type == SharedMediaType.url,
       orElse: () => files.first,
@@ -109,6 +135,57 @@ class _HomeScreenState extends State<HomeScreen> {
       _openRemoteControl(initialUrl: url);
     } else {
       _pendingSharedUrl = url;
+    }
+  }
+
+  /// Bir dosya yoneticisinden "Paylas" ile gonderilen bir yedek (.json)
+  /// dosyasini onay aldiktan sonra geri yukler; ayarlar, uzaktan kumanda
+  /// profilleri ve sohbet gecmisi (hepsi ayni SharedPreferences deposunda)
+  /// yedekteki degerlerle degistirilir.
+  Future<void> _confirmAndRestoreBackup(String filePath) async {
+    _registerActivity();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yedekten Geri Yükle'),
+        content: const Text(
+          'Bu yedek dosyası; ayarlarınızın, uzaktan kumanda profillerinizin '
+          've sohbet geçmişinizin üzerine yazılacak. Devam etmek istiyor '
+          'musunuz?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Geri Yükle'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final content = await File(filePath).readAsString();
+      final count = await BackupService().importBackup(content);
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        _settings = SettingsService(prefs);
+        _history = HistoryService(prefs);
+      });
+      widget.onThemeModeChanged(_settings!.themeMode);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Yedek geri yüklendi ($count ayar).')),
+      );
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Geri yükleme başarısız: $exc')),
+      );
     }
   }
 

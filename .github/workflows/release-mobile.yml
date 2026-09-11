@@ -1,0 +1,56 @@
+name: Build and Release Mobile App (AI Kedi Asistani)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Surum etiketi (orn. v1.1.0) - tag olmadan elle tetiklerken gerekli'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai_cat_mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Bagimliliklari kur
+        run: flutter pub get
+
+      - name: Analiz et
+        run: flutter analyze
+
+      - name: Testleri calistir
+        run: flutter test
+
+      - name: APK derle
+        run: flutter build apk --release
+
+      - name: APK'yi surum dosyasi olarak adlandir
+        run: cp build/app/outputs/flutter-apk/app-release.apk ai-kedi-asistani.apk
+
+      - name: GitHub Release olustur
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          files: ai_cat_mobile/ai-kedi-asistani.apk
+          generate_release_notes: true
