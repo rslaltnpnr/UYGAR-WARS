@@ -2,6 +2,8 @@ config.json
 chat_history.json
 remote_cert.pem
 remote_key.pem
+crash.log
+.last_crash
 __pycache__/
 *.pyc
 build/
