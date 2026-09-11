@@ -22,7 +22,9 @@ karakteri (PyQt6).
   yaninda: **medya kontrolu** (oynat/duraklat, ileri/geri, ses), bilgisayari
   **kilitleme/uyku moduna alma** ve kucultulmus bir **ekran goruntusu**
   isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim
-  sistemlerinde bu komutlar sessizce hicbir sey yapmaz).
+  sistemlerinde bu komutlar sessizce hicbir sey yapmaz). Telefon
+  uygulamasi ayrica bu bilgisayarin sohbet gecmisini **ice aktarabilir**
+  (sohbet panelindeki bulut simgesi).
   - Sunucu **HTTPS (TLS)** uzerinden calisir; ilk calistirmada otomatik
     olarak kendinden imzali bir sertifika (`remote_cert.pem`/
     `remote_key.pem`, `.gitignore`'da - asla paylasmayin/commitlemeyin)

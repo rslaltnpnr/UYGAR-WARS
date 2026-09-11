@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/chat_entry.dart';
 import '../services/history_service.dart';
+import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
 
@@ -32,9 +33,11 @@ class ChatSheet extends StatefulWidget {
 class _ChatSheetState extends State<ChatSheet> {
   final _controller = TextEditingController();
   final _picker = ImagePicker();
+  final _remoteService = RemoteControlService();
   late List<ChatEntry> _entries;
   XFile? _pendingImage;
   bool _busy = false;
+  bool _importing = false;
 
   @override
   void initState() {
@@ -111,6 +114,82 @@ class _ChatSheetState extends State<ChatSheet> {
     setState(() => _entries = []);
   }
 
+  Future<void> _importFromDesktop() async {
+    if (_importing) return;
+    final profiles = widget.settings.remoteProfiles;
+    if (profiles.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Önce "Bilgisayarı Kumanda Et" panelinden bir bilgisayar ekleyin.',
+          ),
+        ),
+      );
+      return;
+    }
+    final activeId = widget.settings.activeProfileId;
+    final profile = profiles.firstWhere(
+      (p) => p.id == activeId,
+      orElse: () => profiles.first,
+    );
+
+    setState(() => _importing = true);
+    try {
+      final result = await _remoteService.fetchHistory(
+        ip: profile.ip,
+        port: profile.port,
+        pin: profile.pin,
+        pinnedFingerprint: profile.certFingerprint,
+      );
+      widget.settings.remoteProfiles = profiles
+          .map(
+            (p) => p.id == profile.id
+                ? p.copyWith(certFingerprint: result.fingerprint)
+                : p,
+          )
+          .toList();
+
+      final imported = result.entries
+          .map(
+            (e) => ChatEntry(
+              time: DateTime.tryParse(e['time'] as String? ?? '') ??
+                  DateTime.now(),
+              question: e['question'] as String? ?? '',
+              answer: e['answer'] as String? ?? '',
+              isError: e['is_error'] as bool? ?? false,
+            ),
+          )
+          .toList();
+
+      String keyOf(ChatEntry e) =>
+          '${e.time.toIso8601String()}|${e.question}|${e.answer}';
+      final existingKeys = _entries.map(keyOf).toSet();
+      var addedCount = 0;
+      for (final entry in imported) {
+        final key = keyOf(entry);
+        if (existingKeys.contains(key)) continue;
+        existingKeys.add(key);
+        widget.history.add(entry);
+        addedCount++;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _entries = widget.history.load().reversed.toList();
+        _importing = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$addedCount yeni kayıt içe aktarıldı.')),
+      );
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() => _importing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(exc.toString())),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -144,6 +223,23 @@ class _ChatSheetState extends State<ChatSheet> {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
+                  ),
+                  IconButton(
+                    icon: _importing
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.textSecondary,
+                            ),
+                          )
+                        : Icon(
+                            Icons.cloud_download_outlined,
+                            color: colors.textSecondary,
+                          ),
+                    tooltip: 'Bilgisayardan Geçmişi Al',
+                    onPressed: _importing ? null : _importFromDesktop,
                   ),
                   IconButton(
                     icon: Icon(

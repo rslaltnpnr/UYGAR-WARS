@@ -16,7 +16,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   sistem temasi**) aciliyor. Tema tercihi cihazda saklanir.
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
-  goruntulenip temizlenebiliyor.
+  goruntulenip temizlenebiliyor. Sohbet panelindeki bulut simgesiyle
+  eslesik bilgisayarin kendi sohbet gecmisini **ice aktarabilirsiniz**
+  (zaten var olan kayitlar tekrar eklenmez).
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
   cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.

@@ -551,6 +551,7 @@ class RemoteCommandServer(QThread):
       POST /media      {"pin", "action"} - medya tuslarini simule eder
       POST /power      {"pin", "action"} - kilitler / uyku moduna alir
       POST /screenshot {"pin"}           - kucultulmus bir ekran goruntusu dondurur
+      POST /history    {"pin"}           - sohbet gecmisini dondurur (telefona ice aktarmak icin)
     Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
     (ana/GUI thread'ine Qt tarafindan otomatik kuyruklanir) yayinlanir.
     """
@@ -559,13 +560,15 @@ class RemoteCommandServer(QThread):
     media_command_received = pyqtSignal(str)
     power_command_received = pyqtSignal(str)
 
-    def __init__(self, config: ConfigManager, parent=None):
+    def __init__(self, config: ConfigManager, history: ChatHistoryManager, parent=None):
         super().__init__(parent)
         self.config = config
+        self.history = history
         self._httpd = None
 
     def run(self):
         config = self.config
+        history = self.history
         open_signal = self.command_received
         media_signal = self.media_command_received
         power_signal = self.power_command_received
@@ -587,7 +590,7 @@ class RemoteCommandServer(QThread):
                 self.wfile.write(body)
 
             def do_POST(self):
-                if self.path not in ("/open", "/media", "/power", "/screenshot"):
+                if self.path not in ("/open", "/media", "/power", "/screenshot", "/history"):
                     self._send_json(404, {"error": "bulunamadi"})
                     return
 
@@ -648,13 +651,17 @@ class RemoteCommandServer(QThread):
                     self._send_json(200, {"status": "ok"})
                     return
 
-                # self.path == "/screenshot"
-                try:
-                    image_b64 = capture_screenshot_jpeg_base64()
-                except Exception as exc:
-                    self._send_json(500, {"error": f"ekran goruntusu alinamadi: {exc}"})
+                if self.path == "/screenshot":
+                    try:
+                        image_b64 = capture_screenshot_jpeg_base64()
+                    except Exception as exc:
+                        self._send_json(500, {"error": f"ekran goruntusu alinamadi: {exc}"})
+                        return
+                    self._send_json(200, {"status": "ok", "image_base64": image_b64})
                     return
-                self._send_json(200, {"status": "ok", "image_base64": image_b64})
+
+                # self.path == "/history"
+                self._send_json(200, {"status": "ok", "entries": history.entries})
 
         if not ensure_remote_tls_cert():
             return  # sertifika olusturulamadi - uzaktan kumanda olmadan devam et
@@ -1205,7 +1212,7 @@ class CatCharacter(QWidget):
         self.revert_timer.setSingleShot(True)
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
 
-        self.remote_server = RemoteCommandServer(self.config, self)
+        self.remote_server = RemoteCommandServer(self.config, self.history, self)
         self.remote_server.command_received.connect(self._on_remote_command)
         self.remote_server.media_command_received.connect(self._on_media_command)
         self.remote_server.power_command_received.connect(self._on_power_command)
