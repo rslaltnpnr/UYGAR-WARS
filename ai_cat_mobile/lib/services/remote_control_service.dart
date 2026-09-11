@@ -60,10 +60,31 @@ class RemoteControlService {
     if (response.statusCode == 401) {
       throw RemoteControlException('PIN yanlis.');
     }
-    if (response.statusCode != 200) {
+    if (response.statusCode == 429) {
       throw RemoteControlException(
-        'Bilgisayar istegi reddetti (kod ${response.statusCode}).',
+        '${_serverErrorMessage(response) ?? 'Cok fazla yanlis deneme yapildi'}. '
+        'Biraz bekleyip tekrar dene.',
       );
     }
+    if (response.statusCode != 200) {
+      final detail = _serverErrorMessage(response);
+      throw RemoteControlException(
+        detail != null
+            ? 'Bilgisayar istegi reddetti: $detail'
+            : 'Bilgisayar istegi reddetti (kod ${response.statusCode}).',
+      );
+    }
+  }
+
+  String? _serverErrorMessage(http.Response response) {
+    try {
+      final data = jsonDecode(response.body);
+      if (data is Map && data['error'] is String) {
+        return data['error'] as String;
+      }
+    } catch (_) {
+      // govde JSON degilse yok say, jenerik mesaj kullanilir
+    }
+    return null;
   }
 }

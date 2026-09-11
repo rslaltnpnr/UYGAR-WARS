@@ -17,6 +17,13 @@ class RemoteControlSheet extends StatefulWidget {
 }
 
 class _RemoteControlSheetState extends State<RemoteControlSheet> {
+  static const _presets = <String, String>{
+    'YouTube': 'https://youtube.com',
+    'YouTube Music': 'https://music.youtube.com',
+    'Spotify': 'https://open.spotify.com',
+    'Google': 'https://google.com',
+  };
+
   late final TextEditingController _ipController;
   late final TextEditingController _portController;
   late final TextEditingController _pinController;
@@ -144,6 +151,26 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                 _field(_pinController, 'PIN'),
                 const Divider(color: Colors.white24, height: 32),
                 _field(_urlController, 'Açılacak bağlantı (https://...)'),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _presets.entries
+                      .map(
+                        (preset) => ActionChip(
+                          label: Text(preset.key),
+                          labelStyle: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                          backgroundColor: Colors.white.withValues(alpha: 0.1),
+                          side: const BorderSide(color: Colors.white24),
+                          onPressed: () => setState(
+                              () => _urlController.text = preset.value),
+                        ),
+                      )
+                      .toList(),
+                ),
                 const SizedBox(height: 14),
                 ElevatedButton.icon(
                   onPressed: _busy ? null : _send,
