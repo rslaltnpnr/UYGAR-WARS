@@ -81,6 +81,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _settings = SettingsService(prefs);
       _history = HistoryService(prefs);
     });
+    // Ana ekran widget'indaki baglanti durumu satirinin ilk 45sn'lik
+    // periyodik yoklamayi beklemeden hemen tazelenmesi icin.
+    _pollForDesktopAlerts();
     final pendingUrl = _pendingSharedUrl;
     if (pendingUrl != null) {
       _pendingSharedUrl = null;
@@ -253,13 +256,19 @@ class _HomeScreenState extends State<HomeScreen> {
     final settings = _settings;
     if (settings == null) return;
     final profiles = settings.remoteProfiles;
-    if (profiles.isEmpty) return;
+    if (profiles.isEmpty) {
+      await _updateWidgetStatus(profileName: null, connected: false);
+      return;
+    }
     final activeId = settings.activeProfileId;
     final profile = profiles.firstWhere(
       (p) => p.id == activeId,
       orElse: () => profiles.first,
     );
-    if (profile.ip.isEmpty || profile.pin.isEmpty) return;
+    if (profile.ip.isEmpty || profile.pin.isEmpty) {
+      await _updateWidgetStatus(profileName: profile.name, connected: false);
+      return;
+    }
 
     _polling = true;
     try {
@@ -291,10 +300,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 : p,
           )
           .toList();
+      await _updateWidgetStatus(profileName: profile.name, connected: true);
     } catch (_) {
       // bilgisayar kapali/ag disinda olabilir - sessizce yok say
+      await _updateWidgetStatus(profileName: profile.name, connected: false);
     } finally {
       _polling = false;
+    }
+  }
+
+  /// Ana ekran widget'indaki baglanti durumu satirini gunceller. Widget
+  /// dinamik veri gostermedigi icin (updatePeriodMillis=0) bu cagri
+  /// olmadan hicbir zaman yenilenmez - o yuzden her poll sonucunda
+  /// (basarili/basarisiz) ve profil yoksa/eksikse de cagrilir.
+  Future<void> _updateWidgetStatus({
+    required String? profileName,
+    required bool connected,
+  }) async {
+    try {
+      await HomeWidget.saveWidgetData<String>(
+        'widget_profile_name',
+        profileName,
+      );
+      await HomeWidget.saveWidgetData<String>(
+        'widget_connection_status',
+        connected ? 'connected' : 'disconnected',
+      );
+      await HomeWidget.updateWidget(androidName: 'CatWidgetProvider');
+    } catch (_) {
+      // widget ana ekrana eklenmemis olabilir - onemli degil
     }
   }
 
