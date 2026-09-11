@@ -32,7 +32,14 @@ class UpdateService {
     final packageInfo = await PackageInfo.fromPlatform();
     final currentVersion = packageInfo.version;
 
-    final uri = Uri.parse('https://api.github.com/repos/$_repo/releases/latest');
+    // /releases/latest bu depodaki EN SON yayinlanan release'i doner - ama
+    // bu depoda masaustu ve mobil uygulamalar release'leri paylasir, bu
+    // yuzden "en son" bazen diger uygulamaninki olabilir. Bunun yerine
+    // listeyi (en yeniden eskiye) tarayip icinde bizim APK'mizin oldugu
+    // ilk release'i buluyoruz.
+    final uri = Uri.parse(
+      'https://api.github.com/repos/$_repo/releases?per_page=10',
+    );
     final http.Response response;
     try {
       response = await http
@@ -44,12 +51,15 @@ class UpdateService {
     if (response.statusCode == 404) return null; // henuz release yok
     if (response.statusCode != 200) return null;
 
-    final Map<String, dynamic> data;
+    final List<dynamic> releases;
     try {
-      data = jsonDecode(response.body) as Map<String, dynamic>;
+      releases = jsonDecode(response.body) as List<dynamic>;
     } catch (_) {
       return null;
     }
+
+    final data = findReleaseWithAsset(releases, _apkAssetName);
+    if (data == null) return null; // bu uygulamaya ait release yok
 
     final tag = (data['tag_name'] as String? ?? '').trim();
     final htmlUrl = (data['html_url'] as String? ?? '').trim();
@@ -63,6 +73,28 @@ class UpdateService {
     }
     return MobileUpdateInfo(tag: tag, htmlUrl: htmlUrl, apkDownloadUrl: apkUrl);
   }
+}
+
+/// [releases] listesinde (GitHub Releases API'sinin dondugu sirayla, en
+/// yeniden eskiye) taslak/on-surum olmayan ve icinde [assetName] adinda bir
+/// dosya olan ilk release'i doner - yoksa null. Bu depoda masaustu ve
+/// mobil uygulamalarin release'leri ayni listede karistigi icin gerekli
+/// (bkz. checkForUpdate).
+Map<String, dynamic>? findReleaseWithAsset(
+  List<dynamic> releases,
+  String assetName,
+) {
+  for (final release in releases) {
+    if (release is! Map) continue;
+    final map = release.cast<String, dynamic>();
+    if (map['draft'] == true || map['prerelease'] == true) continue;
+    final assets = map['assets'] as List? ?? const [];
+    final hasAsset = assets.any(
+      (asset) => asset is Map && asset['name'] == assetName,
+    );
+    if (hasAsset) return map;
+  }
+  return null;
 }
 
 /// [remote] surumu [local] surumden daha yeniyse true doner. Onde "v"

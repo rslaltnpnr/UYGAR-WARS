@@ -33,4 +33,81 @@ void main() {
       expect(isNewerVersion('1.2.0', '1.1.0'), isTrue);
     });
   });
+
+  group('findReleaseWithAsset', () {
+    Map<String, dynamic> release({
+      required String tag,
+      required List<String> assetNames,
+      bool draft = false,
+      bool prerelease = false,
+    }) {
+      return {
+        'tag_name': tag,
+        'draft': draft,
+        'prerelease': prerelease,
+        'assets': assetNames.map((name) => {'name': name}).toList(),
+      };
+    }
+
+    test(
+      'depo release listesini masaustu ve mobil karisikken dogru ayikliyor',
+      () {
+        // Gercek senaryo: masaustu daha yeni bir release yayinladi
+        // (v1.2.0, sadece .exe), mobilin kendi surumu (v1.0.0, .apk)
+        // listede daha asagida. /releases/latest kullansaydik yanlislikla
+        // masaustu release'ini bulurduk.
+        final releases = [
+          release(tag: 'v1.2.0', assetNames: ['AI-Kedi-Asistani.exe']),
+          release(tag: 'v1.0.0', assetNames: ['ai-kedi-asistani.apk']),
+        ];
+
+        final found = findReleaseWithAsset(releases, 'ai-kedi-asistani.apk');
+
+        expect(found, isNotNull);
+        expect(found!['tag_name'], 'v1.0.0');
+      },
+    );
+
+    test('taslak (draft) release atlanir', () {
+      final releases = [
+        release(
+          tag: 'v2.0.0',
+          assetNames: ['ai-kedi-asistani.apk'],
+          draft: true,
+        ),
+        release(tag: 'v1.0.0', assetNames: ['ai-kedi-asistani.apk']),
+      ];
+
+      final found = findReleaseWithAsset(releases, 'ai-kedi-asistani.apk');
+
+      expect(found!['tag_name'], 'v1.0.0');
+    });
+
+    test('on-surum (prerelease) atlanir', () {
+      final releases = [
+        release(
+          tag: 'v2.0.0-beta',
+          assetNames: ['ai-kedi-asistani.apk'],
+          prerelease: true,
+        ),
+        release(tag: 'v1.0.0', assetNames: ['ai-kedi-asistani.apk']),
+      ];
+
+      final found = findReleaseWithAsset(releases, 'ai-kedi-asistani.apk');
+
+      expect(found!['tag_name'], 'v1.0.0');
+    });
+
+    test('eslesen asset olan release yoksa null doner', () {
+      final releases = [
+        release(tag: 'v1.2.0', assetNames: ['AI-Kedi-Asistani.exe']),
+      ];
+
+      expect(findReleaseWithAsset(releases, 'ai-kedi-asistani.apk'), isNull);
+    });
+
+    test('bos liste null doner', () {
+      expect(findReleaseWithAsset(const [], 'ai-kedi-asistani.apk'), isNull);
+    });
+  });
 }

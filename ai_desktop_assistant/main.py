@@ -171,7 +171,7 @@ REMOTE_SERVER_PORT = 8765
 REMOTE_MAX_FAILED_ATTEMPTS = 5
 REMOTE_LOCKOUT_SECONDS = 60
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
 UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -819,7 +819,12 @@ class UpdateCheckWorker(QThread):
             import urllib.error
             import urllib.request
 
-            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            # /releases/latest doner reponun en son yayinlanan release'i -
+            # ama bu repo'da masaustu ve mobil uygulamalar release'leri
+            # paylasir, bu yuzden "en son" bazen diger uygulamaninki olabilir.
+            # Bunun yerine listeyi (en yeniden eskiye) tarayip icinde bizim
+            # exe'mizin oldugu ilk release'i buluyoruz.
+            url = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=10"
             req = urllib.request.Request(
                 url,
                 headers={
@@ -828,7 +833,7 @@ class UpdateCheckWorker(QThread):
                 },
             )
             with urllib.request.urlopen(req, timeout=UPDATE_CHECK_TIMEOUT_SECONDS) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
+                releases = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
                 self.check_finished.emit(True, "")  # henuz release yayinlanmamis
@@ -837,6 +842,20 @@ class UpdateCheckWorker(QThread):
             return
         except Exception as exc:
             self.check_finished.emit(False, str(exc))
+            return
+
+        data = None
+        for release in releases or []:
+            if release.get("draft") or release.get("prerelease"):
+                continue
+            asset_names = {
+                str(asset.get("name", "")) for asset in release.get("assets", []) or []
+            }
+            if UPDATE_ASSET_NAME in asset_names:
+                data = release
+                break
+        if data is None:
+            self.check_finished.emit(True, "")  # bu uygulamaya ait release yok
             return
 
         tag = str(data.get("tag_name", "")).strip()
