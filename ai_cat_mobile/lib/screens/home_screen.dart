@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_entry.dart';
@@ -39,6 +40,8 @@ class _HomeScreenState extends State<HomeScreen> {
   DateTime _lastActivity = DateTime.now();
   Timer? _sleepCheckTimer;
   Timer? _revertTimer;
+  StreamSubscription<List<SharedMediaFile>>? _shareSub;
+  String? _pendingSharedUrl;
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
       const Duration(seconds: 5),
       (_) => _checkSleep(),
     );
+    _initShareIntent();
   }
 
   Future<void> _init() async {
@@ -57,12 +61,50 @@ class _HomeScreenState extends State<HomeScreen> {
       _settings = SettingsService(prefs);
       _history = HistoryService(prefs);
     });
+    final pendingUrl = _pendingSharedUrl;
+    if (pendingUrl != null) {
+      _pendingSharedUrl = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openRemoteControl(initialUrl: pendingUrl);
+      });
+    }
+  }
+
+  /// Baska bir uygulamadan (orn. YouTube) "Paylas" ile bir link
+  /// gonderildiginde "Bilgisayarda Ac" panelini linkle dolu acar.
+  void _initShareIntent() {
+    _shareSub = ReceiveSharingIntent.instance.getMediaStream().listen(
+      _handleSharedFiles,
+      onError: (_) {},
+    );
+    ReceiveSharingIntent.instance.getInitialMedia().then((files) {
+      _handleSharedFiles(files);
+      ReceiveSharingIntent.instance.reset();
+    });
+  }
+
+  void _handleSharedFiles(List<SharedMediaFile> files) {
+    if (files.isEmpty) return;
+    final shared = files.firstWhere(
+      (f) => f.type == SharedMediaType.text || f.type == SharedMediaType.url,
+      orElse: () => files.first,
+    );
+    final text = shared.path.trim();
+    if (text.isEmpty) return;
+    final match = RegExp(r'https?://\S+').firstMatch(text);
+    final url = match?.group(0) ?? text;
+    if (_settings != null && mounted) {
+      _openRemoteControl(initialUrl: url);
+    } else {
+      _pendingSharedUrl = url;
+    }
   }
 
   @override
   void dispose() {
     _sleepCheckTimer?.cancel();
     _revertTimer?.cancel();
+    _shareSub?.cancel();
     super.dispose();
   }
 
@@ -119,7 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ); // isim degismis olabilir, baslik guncellensin
   }
 
-  void _openRemoteControl() {
+  void _openRemoteControl({String? initialUrl}) {
     _registerActivity();
     final settings = _settings;
     if (settings == null) return;
@@ -127,7 +169,8 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => RemoteControlSheet(settings: settings),
+      builder: (_) =>
+          RemoteControlSheet(settings: settings, initialUrl: initialUrl),
     );
   }
 

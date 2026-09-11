@@ -13,7 +13,11 @@ import '../theme/app_colors.dart';
 class RemoteControlSheet extends StatefulWidget {
   final SettingsService settings;
 
-  const RemoteControlSheet({super.key, required this.settings});
+  /// Baska bir uygulamadan "Paylas" ile gelen bir link varsa, "Acilacak
+  /// baglanti" alanini onceden doldurmak icin kullanilir.
+  final String? initialUrl;
+
+  const RemoteControlSheet({super.key, required this.settings, this.initialUrl});
 
   @override
   State<RemoteControlSheet> createState() => _RemoteControlSheetState();
@@ -48,6 +52,9 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     _activeProfileId = widget.settings.activeProfileId ??
         (_profiles.isNotEmpty ? _profiles.first.id : null);
     _loadActiveProfileIntoFields();
+    if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
+      _urlController.text = widget.initialUrl!;
+    }
   }
 
   @override

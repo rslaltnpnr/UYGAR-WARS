@@ -47,6 +47,10 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   ses acma/kisma/sessize alma), **kilitle/uyku** butonlari (onay sorar)
   ve bilgisayarin kucultulmus bir **ekran goruntusunu** isteyip
   gorebilirsiniz.
+- **Paylasim (Share) entegrasyonu**: baska bir uygulamada (orn. YouTube,
+  tarayici) bir linki "Paylas" menusunden "AI Kedi Asistani"na
+  gonderirseniz, uygulama acilip "Bilgisayarda Ac" paneli o linkle dolu
+  halde acilir - tek dokunusla bilgisayarda oynatabilirsiniz.
 
 ## 1) Gerekli araclari kurun (Windows)
 
