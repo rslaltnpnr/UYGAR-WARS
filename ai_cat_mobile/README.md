@@ -166,6 +166,38 @@ gerek yok - `.github/workflows/release-mobile.yml` bunu otomatik yapar:
 Etiket adi `v` ile baslamali (orn. `v1.2.0`) - surum karsilastirma mantigi
 bunu bekler.
 
+### APK imzalama (surumler arasi guncelleme icin sart)
+
+Android, bir APK'yi mevcut kurulumun **uzerine** ancak ayni imza anahtariyla
+imzalanmissa kurmaya izin verir - farkli bir anahtarla imzalanmis bir APK
+"uygulama yuklenmedi" hatasiyla reddedilir ve kullanici once eskisini
+kaldirmak zorunda kalir (tum yerel verisini kaybederek). `key.properties`
+yoksa `build.gradle.kts` release build'i **debug anahtariyla** imzalar -
+CI'nin her calismasinda bu anahtar rastgele yeniden uretildigi icin her
+release **farkli** bir imzayla cikar ve guncellemeler bu sekilde bozulur.
+
+Bunu onlemek icin repoya `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`
+ve `ANDROID_KEY_ALIAS` secret'lari eklenmelidir (Settings > Secrets and
+variables > Actions > New repository secret):
+
+1. Kalici bir imza anahtari uretin (bir kere, sonsuza kadar saklayin - **kaybederse**
+   bir daha hicbir zaman eski kurulumlarin uzerine guncelleme yapilamaz):
+
+   ```bash
+   keytool -genkeypair -v -keystore upload-keystore.jks -alias upload \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. `ANDROID_KEYSTORE_BASE64` secret'ina `base64 -w0 upload-keystore.jks`
+   ciktisini, `ANDROID_KEYSTORE_PASSWORD` secret'ina keytool'da girdiginiz
+   parolayi, `ANDROID_KEY_ALIAS` secret'ina `upload` degerini girin.
+3. `upload-keystore.jks` dosyasini guvenli bir yere (parola yoneticisi vb.)
+   yedekleyin - repoya **asla** commitlemeyin (`.gitignore` zaten engeller).
+
+Secret'lar tanimlanana kadar release'ler debug anahtariyla imzalanmaya
+devam eder (build kirilmaz, sadece guncellemeler arasi imza tutarliligi
+saglanmaz) - `release-mobile.yml` secret yoksa bu adimi otomatik atlar.
+
 ## Notlar
 
 - API anahtari ve ayarlar cihazda `shared_preferences` ile duz metin
