@@ -57,6 +57,9 @@ karakteri (PyQt6).
   yazilir ve uygulama kendini otomatik olarak yeniden baslatir (cok kisa
   arayla ust uste cokerse - baslangic hatasi dongusu - tekrar baslatmaz,
   `crash.log`'u incelemeniz gerekir).
+- **Hatirlatici**: sag tik menusundeki "Hatirlatici Kur" ile "X dakika
+  sonra" seklinde tekil bir hatirlatici kurabilirsiniz; sure dolunca
+  sistem tepsisinden bildirim gosterilir (tepsi yoksa bir pencere acilir).
 - **Guncelleme kontrolu**: acilista GitHub Releases'ten yeni bir surum
   olup olmadigi sessizce kontrol edilir (bulunursa sistem tepsisinden
   bildirim gosterilir); sag tik menusundeki "Guncellemeleri Kontrol Et"

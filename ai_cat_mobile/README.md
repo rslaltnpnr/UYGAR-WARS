@@ -16,6 +16,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
   goruntulenip temizlenebiliyor.
+- **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
+  bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
+  cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.
 - Gemini istekleri: 503 (asiri yuklenme) ve 404 (model kaldirildi)
   durumlarinda masaustu suruumundeki gibi otomatik tekrar deneme ve
   yedek modele (`gemini-3.6-flash`) gecis var.
