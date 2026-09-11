@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/backup_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_colors.dart';
 import 'about_dialog.dart';
 
@@ -107,106 +108,143 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
   }
 
+  Future<void> _addHomeWidget() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final requested = await WidgetService.requestPinWidget();
+    if (!mounted) return;
+    if (!requested) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Cihazınız/başlatıcınız widget eklemeyi desteklemiyor. Ana '
+            'ekranda boş bir alana uzun basıp "Widget\'lar" menüsünden '
+            'elle ekleyebilirsiniz.',
+          ),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return AlertDialog(
       backgroundColor: colors.panel,
       title: Text('Ayarlar', style: TextStyle(color: colors.textPrimary)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _nameController,
-            style: TextStyle(color: colors.textPrimary),
-            decoration: InputDecoration(
-              labelText: 'Kedi ismi',
-              labelStyle: TextStyle(color: colors.textSecondary),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _apiKeyController,
-            obscureText: _obscureKey,
-            style: TextStyle(color: colors.textPrimary),
-            decoration: InputDecoration(
-              labelText: 'Gemini API Key',
-              labelStyle: TextStyle(color: colors.textSecondary),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureKey ? Icons.visibility : Icons.visibility_off,
-                  color: colors.textSecondary,
-                ),
-                onPressed: () => setState(() => _obscureKey = !_obscureKey),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _nameController,
+              style: TextStyle(color: colors.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Kedi ismi',
+                labelStyle: TextStyle(color: colors.textSecondary),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Tema', style: TextStyle(color: colors.textSecondary, fontSize: 12)),
-          ),
-          const SizedBox(height: 6),
-          SegmentedButton<ThemeMode>(
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.system,
-                label: Text('Sistem'),
-                icon: Icon(Icons.brightness_auto),
-              ),
-              ButtonSegment(
-                value: ThemeMode.light,
-                label: Text('Açık'),
-                icon: Icon(Icons.light_mode),
-              ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                label: Text('Koyu'),
-                icon: Icon(Icons.dark_mode),
-              ),
-            ],
-            selected: {_themeMode},
-            onSelectionChanged: (selection) =>
-                setState(() => _themeMode = selection.first),
-          ),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Yedekleme',
-              style: TextStyle(color: colors.textSecondary, fontSize: 12),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _shareBackup,
-                  icon: const Icon(Icons.upload_file, size: 18),
-                  label: const Text('Yedek Al'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _apiKeyController,
+              obscureText: _obscureKey,
+              style: TextStyle(color: colors.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Gemini API Key',
+                labelStyle: TextStyle(color: colors.textSecondary),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureKey ? Icons.visibility : Icons.visibility_off,
+                    color: colors.textSecondary,
+                  ),
+                  onPressed: () => setState(() => _obscureKey = !_obscureKey),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _checkForUpdate,
-                  icon: const Icon(Icons.system_update, size: 18),
-                  label: const Text('Güncelleme Kontrol'),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Geri yüklemek için yedek dosyasını bir dosya yöneticisinden '
-              'bu uygulamaya "Paylaş" ile gönderin.',
-              style: TextStyle(color: colors.textMuted, fontSize: 11),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Tema',
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ThemeMode.system,
+                  label: Text('Sistem'),
+                  icon: Icon(Icons.brightness_auto),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.light,
+                  label: Text('Açık'),
+                  icon: Icon(Icons.light_mode),
+                ),
+                ButtonSegment(
+                  value: ThemeMode.dark,
+                  label: Text('Koyu'),
+                  icon: Icon(Icons.dark_mode),
+                ),
+              ],
+              selected: {_themeMode},
+              onSelectionChanged: (selection) =>
+                  setState(() => _themeMode = selection.first),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Yedekleme',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _shareBackup,
+                    icon: const Icon(Icons.upload_file, size: 18),
+                    label: const Text('Yedek Al'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _checkForUpdate,
+                    icon: const Icon(Icons.system_update, size: 18),
+                    label: const Text('Güncelleme Kontrol'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Geri yüklemek için yedek dosyasını bir dosya yöneticisinden '
+                'bu uygulamaya "Paylaş" ile gönderin.',
+                style: TextStyle(color: colors.textMuted, fontSize: 11),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Ana Ekran Widget\'ı',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _addHomeWidget,
+                icon: const Icon(Icons.widgets_outlined, size: 18),
+                label: const Text('Ana Ekrana Widget Ekle'),
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
