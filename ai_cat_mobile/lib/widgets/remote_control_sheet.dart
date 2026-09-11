@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/remote_profile.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -7,7 +8,8 @@ import '../theme/app_colors.dart';
 /// "Bilgisayari Kumanda Et" paneli: masaustundeki kedi uygulamasina
 /// (ayni Wi-Fi agindan, PIN ile) bir baglanti gonderip acilmasini
 /// saglar - orn. bir YouTube linki gonderirseniz bilgisayarda muzik/
-/// video calar.
+/// video calar. Birden fazla bilgisayarla (ev/is gibi) eslesip
+/// aralarinda gecis yapabilirsiniz.
 class RemoteControlSheet extends StatefulWidget {
   final SettingsService settings;
 
@@ -25,9 +27,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     'Google': 'https://google.com',
   };
 
-  late final TextEditingController _ipController;
-  late final TextEditingController _portController;
-  late final TextEditingController _pinController;
+  late List<RemoteProfile> _profiles;
+  String? _activeProfileId;
+
+  final _nameController = TextEditingController();
+  final _ipController = TextEditingController();
+  final _portController = TextEditingController();
+  final _pinController = TextEditingController();
   final _urlController = TextEditingController();
   final _service = RemoteControlService();
 
@@ -38,15 +44,15 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   @override
   void initState() {
     super.initState();
-    _ipController = TextEditingController(text: widget.settings.desktopIp);
-    _portController = TextEditingController(
-      text: widget.settings.desktopPort.toString(),
-    );
-    _pinController = TextEditingController(text: widget.settings.desktopPin);
+    _profiles = widget.settings.remoteProfiles;
+    _activeProfileId = widget.settings.activeProfileId ??
+        (_profiles.isNotEmpty ? _profiles.first.id : null);
+    _loadActiveProfileIntoFields();
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
     _ipController.dispose();
     _portController.dispose();
     _pinController.dispose();
@@ -54,15 +60,56 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     super.dispose();
   }
 
+  RemoteProfile? get _activeProfile {
+    if (_profiles.isEmpty) return null;
+    for (final p in _profiles) {
+      if (p.id == _activeProfileId) return p;
+    }
+    return _profiles.first;
+  }
+
+  void _loadActiveProfileIntoFields() {
+    final p = _activeProfile;
+    _nameController.text = p?.name ?? '';
+    _ipController.text = p?.ip ?? '';
+    _portController.text = (p?.port ?? 8765).toString();
+    _pinController.text = p?.pin ?? '';
+  }
+
+  void _persistProfiles() {
+    widget.settings.remoteProfiles = _profiles;
+    widget.settings.activeProfileId = _activeProfileId;
+  }
+
   void _saveConnectionInfo() {
-    widget.settings.desktopIp = _ipController.text.trim();
-    widget.settings.desktopPort =
-        int.tryParse(_portController.text.trim()) ?? 8765;
-    widget.settings.desktopPin = _pinController.text.trim();
+    final current = _activeProfile;
+    if (current == null) return;
+    final updated = current.copyWith(
+      name: _nameController.text.trim().isEmpty
+          ? current.name
+          : _nameController.text.trim(),
+      ip: _ipController.text.trim(),
+      port: int.tryParse(_portController.text.trim()) ?? 8765,
+      pin: _pinController.text.trim(),
+    );
+    setState(() {
+      _profiles = _profiles.map((p) => p.id == updated.id ? updated : p).toList();
+    });
+    _persistProfiles();
+  }
+
+  void _updateActiveFingerprint(String fingerprint) {
+    final current = _activeProfile;
+    if (current == null) return;
+    final updated = current.copyWith(certFingerprint: fingerprint);
+    setState(() {
+      _profiles = _profiles.map((p) => p.id == updated.id ? updated : p).toList();
+    });
+    _persistProfiles();
   }
 
   void _resetCertificatePairing() {
-    widget.settings.desktopCertFingerprint = '';
+    _updateActiveFingerprint('');
     setState(() {
       _status = 'Sertifika eşleştirmesi sıfırlandı. Bir sonraki bağlantıda '
           'yeniden kaydedilecek.';
@@ -70,8 +117,93 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
   }
 
+  Future<void> _switchProfile(String? id) async {
+    if (id == null || id == _activeProfileId) return;
+    _saveConnectionInfo();
+    setState(() {
+      _activeProfileId = id;
+      _status = null;
+    });
+    widget.settings.activeProfileId = id;
+    _loadActiveProfileIntoFields();
+  }
+
+  Future<void> _addProfile() async {
+    final controller = TextEditingController(
+      text: 'Bilgisayar ${_profiles.length + 1}',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Yeni Bilgisayar Ekle'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'İsim (örn. Ev, İş)'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Ekle'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final profile = RemoteProfile(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name,
+      ip: '',
+      port: 8765,
+      pin: '',
+      certFingerprint: '',
+    );
+    setState(() {
+      _profiles = [..._profiles, profile];
+      _activeProfileId = profile.id;
+      _status = null;
+    });
+    _persistProfiles();
+    _loadActiveProfileIntoFields();
+  }
+
+  Future<void> _deleteActiveProfile() async {
+    final current = _activeProfile;
+    if (current == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Bilgisayarı Sil'),
+        content: Text('"${current.name}" profili silinsin mi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() {
+      _profiles = _profiles.where((p) => p.id != current.id).toList();
+      _activeProfileId = _profiles.isNotEmpty ? _profiles.first.id : null;
+      _status = null;
+    });
+    _persistProfiles();
+    _loadActiveProfileIntoFields();
+  }
+
   Future<void> _send() async {
-    if (_busy) return;
+    if (_busy || _activeProfile == null) return;
     _saveConnectionInfo();
     setState(() {
       _busy = true;
@@ -79,13 +211,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
     try {
       final result = await _service.openUrl(
-        ip: widget.settings.desktopIp,
-        port: widget.settings.desktopPort,
-        pin: widget.settings.desktopPin,
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
         url: _urlController.text,
-        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
-      widget.settings.desktopCertFingerprint = result.fingerprint;
+      _updateActiveFingerprint(result.fingerprint);
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi! Bilgisayarda açılması lazım.';
@@ -103,7 +235,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   }
 
   Future<void> _sendMedia(String action) async {
-    if (_busy) return;
+    if (_busy || _activeProfile == null) return;
     _saveConnectionInfo();
     setState(() {
       _busy = true;
@@ -111,13 +243,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
     try {
       final result = await _service.sendMedia(
-        ip: widget.settings.desktopIp,
-        port: widget.settings.desktopPort,
-        pin: widget.settings.desktopPin,
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
         action: action,
-        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
-      widget.settings.desktopCertFingerprint = result.fingerprint;
+      _updateActiveFingerprint(result.fingerprint);
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi.';
@@ -135,7 +267,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   }
 
   Future<void> _confirmAndSendPower(String action, String label) async {
-    if (_busy) return;
+    if (_busy || _activeProfile == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -162,13 +294,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
     try {
       final result = await _service.sendPower(
-        ip: widget.settings.desktopIp,
-        port: widget.settings.desktopPort,
-        pin: widget.settings.desktopPin,
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
         action: action,
-        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
-      widget.settings.desktopCertFingerprint = result.fingerprint;
+      _updateActiveFingerprint(result.fingerprint);
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi.';
@@ -186,7 +318,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   }
 
   Future<void> _takeScreenshot() async {
-    if (_busy) return;
+    if (_busy || _activeProfile == null) return;
     _saveConnectionInfo();
     setState(() {
       _busy = true;
@@ -194,12 +326,12 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
     try {
       final result = await _service.fetchScreenshot(
-        ip: widget.settings.desktopIp,
-        port: widget.settings.desktopPort,
-        pin: widget.settings.desktopPin,
-        pinnedFingerprint: widget.settings.desktopCertFingerprint,
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
-      widget.settings.desktopCertFingerprint = result.fingerprint;
+      _updateActiveFingerprint(result.fingerprint);
       if (!mounted) return;
       setState(() => _busy = false);
       showDialog(
@@ -225,10 +357,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final hasProfile = _activeProfile != null;
     return DraggableScrollableSheet(
-      initialChildSize: 0.65,
+      initialChildSize: 0.7,
       minChildSize: 0.4,
-      maxChildSize: 0.9,
+      maxChildSize: 0.92,
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
@@ -269,134 +402,181 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                   'Bilgisayardaki kedi uygulamasında sağ tık menüsünden '
                   '"Uzaktan Kumanda Bilgisi"ni açıp buradaki IP, port ve '
                   'PIN\'i bir kez girin. İkisi de aynı Wi-Fi ağına bağlı '
-                  'olmalı.',
+                  'olmalı. Birden fazla bilgisayarla eşleşip aralarında '
+                  'geçiş yapabilirsiniz.',
                   style: TextStyle(color: colors.textMuted, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
-                _field(_ipController, 'Bilgisayar IP (örn. 192.168.1.20)'),
-                const SizedBox(height: 10),
-                _field(
-                  _portController,
-                  'Port',
-                  keyboardType: TextInputType.number,
+                Row(
+                  children: [
+                    Expanded(
+                      child: _profiles.isEmpty
+                          ? Text(
+                              'Henüz bir bilgisayar eklenmedi.',
+                              style: TextStyle(color: colors.textMuted, fontSize: 13),
+                            )
+                          : DropdownButtonFormField<String>(
+                              initialValue: _activeProfileId,
+                              isExpanded: true,
+                              dropdownColor: colors.panel,
+                              style: TextStyle(color: colors.textPrimary),
+                              decoration: InputDecoration(
+                                labelText: 'Bilgisayar',
+                                labelStyle: TextStyle(color: colors.textMuted),
+                              ),
+                              items: _profiles
+                                  .map(
+                                    (p) => DropdownMenuItem(
+                                      value: p.id,
+                                      child: Text(p.name),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _switchProfile,
+                            ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.add_circle_outline, color: colors.accent),
+                      tooltip: 'Yeni Bilgisayar Ekle',
+                      onPressed: _addProfile,
+                    ),
+                    if (hasProfile)
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, color: colors.textMuted),
+                        tooltip: 'Bilgisayarı Sil',
+                        onPressed: _deleteActiveProfile,
+                      ),
+                  ],
                 ),
-                const SizedBox(height: 10),
-                _field(_pinController, 'PIN'),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: _resetCertificatePairing,
-                    icon: Icon(Icons.lock_reset,
-                        size: 16, color: colors.textMuted),
-                    label: Text(
-                      'Sertifika eşleştirmesini sıfırla',
-                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                if (hasProfile) ...[
+                  const SizedBox(height: 6),
+                  _field(_nameController, 'İsim'),
+                  const SizedBox(height: 10),
+                  _field(_ipController, 'Bilgisayar IP (örn. 192.168.1.20)'),
+                  const SizedBox(height: 10),
+                  _field(
+                    _portController,
+                    'Port',
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 10),
+                  _field(_pinController, 'PIN'),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _resetCertificatePairing,
+                      icon: Icon(Icons.lock_reset,
+                          size: 16, color: colors.textMuted),
+                      label: Text(
+                        'Sertifika eşleştirmesini sıfırla',
+                        style: TextStyle(color: colors.textMuted, fontSize: 12),
+                      ),
                     ),
                   ),
-                ),
-                Divider(color: colors.divider, height: 32),
-                _field(_urlController, 'Açılacak bağlantı (https://...)'),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _presets.entries
-                      .map(
-                        (preset) => ActionChip(
-                          label: Text(preset.key),
-                          labelStyle: TextStyle(
-                            color: colors.textPrimary,
-                            fontSize: 12,
-                          ),
-                          backgroundColor: colors.textPrimary.withValues(alpha: 0.1),
-                          side: BorderSide(color: colors.divider),
-                          onPressed: () => setState(
-                              () => _urlController.text = preset.value),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton.icon(
-                  onPressed: _busy ? null : _send,
-                  icon: _busy
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: colors.textPrimary,
+                  Divider(color: colors.divider, height: 32),
+                  _field(_urlController, 'Açılacak bağlantı (https://...)'),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _presets.entries
+                        .map(
+                          (preset) => ActionChip(
+                            label: Text(preset.key),
+                            labelStyle: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 12,
+                            ),
+                            backgroundColor: colors.textPrimary.withValues(alpha: 0.1),
+                            side: BorderSide(color: colors.divider),
+                            onPressed: () => setState(
+                                () => _urlController.text = preset.value),
                           ),
                         )
-                      : const Icon(Icons.send),
-                  label: const Text('Bilgisayarda Aç'),
-                ),
-                Divider(color: colors.divider, height: 32),
-                Text(
-                  'Medya Kontrolü',
-                  style: TextStyle(color: colors.textMuted, fontSize: 12),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.skip_previous, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('prev'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.play_arrow, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('play_pause'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.skip_next, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('next'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.volume_down, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('vol_down'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.volume_up, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('vol_up'),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.volume_off, color: colors.textPrimary),
-                      onPressed: _busy ? null : () => _sendMedia('mute'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _confirmAndSendPower('lock', 'kilitlemek'),
-                        icon: const Icon(Icons.lock_outline),
-                        label: const Text('Kilitle'),
+                        .toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  ElevatedButton.icon(
+                    onPressed: _busy ? null : _send,
+                    icon: _busy
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.textPrimary,
+                            ),
+                          )
+                        : const Icon(Icons.send),
+                    label: const Text('Bilgisayarda Aç'),
+                  ),
+                  Divider(color: colors.divider, height: 32),
+                  Text(
+                    'Medya Kontrolü',
+                    style: TextStyle(color: colors.textMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.skip_previous, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('prev'),
                       ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _busy
-                            ? null
-                            : () => _confirmAndSendPower(
-                                'sleep', 'uyku moduna almak'),
-                        icon: const Icon(Icons.bedtime_outlined),
-                        label: const Text('Uyku'),
+                      IconButton(
+                        icon: Icon(Icons.play_arrow, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('play_pause'),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : _takeScreenshot,
-                  icon: const Icon(Icons.screenshot_monitor),
-                  label: const Text('Ekran Görüntüsü Al'),
-                ),
+                      IconButton(
+                        icon: Icon(Icons.skip_next, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('next'),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.volume_down, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('vol_down'),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.volume_up, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('vol_up'),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.volume_off, color: colors.textPrimary),
+                        onPressed: _busy ? null : () => _sendMedia('mute'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _confirmAndSendPower('lock', 'kilitlemek'),
+                          icon: const Icon(Icons.lock_outline),
+                          label: const Text('Kilitle'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _confirmAndSendPower(
+                                  'sleep', 'uyku moduna almak'),
+                          icon: const Icon(Icons.bedtime_outlined),
+                          label: const Text('Uyku'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _takeScreenshot,
+                    icon: const Icon(Icons.screenshot_monitor),
+                    label: const Text('Ekran Görüntüsü Al'),
+                  ),
+                ],
                 if (_status != null) ...[
                   const SizedBox(height: 12),
                   Text(
