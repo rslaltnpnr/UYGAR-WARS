@@ -13,7 +13,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
 - Kediye **dokununca** metin ve/veya fotograf (galeri ya da kamera)
   ile soru sorabileceginiz bir sohbet paneli aciliyor.
 - Kediyi **uzun basinca** ayarlar (kedi ismi, Gemini API Key, **acik/koyu/
-  sistem temasi**) aciliyor. Tema tercihi cihazda saklanir.
+  sistem temasi**) aciliyor. Tema tercihi cihazda saklanir. Ayarlar
+  penceresindeki "Hakkinda" ile surum numarasini ve GitHub deposu
+  linkini gorebilirsiniz.
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
   goruntulenip temizlenebiliyor. Sohbet panelindeki bulut simgesiyle
@@ -46,7 +48,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   yaninda ayni panelden: **medya kontrolu** (oynat/duraklat, ileri/geri,
   ses acma/kisma/sessize alma), **kilitle/uyku** butonlari (onay sorar)
   ve bilgisayarin kucultulmus bir **ekran goruntusunu** isteyip
-  gorebilirsiniz.
+  gorebilirsiniz. **Pano senkronizasyonu**: telefonundaki panoyu
+  bilgisayara gonderebilir ("Panomu Gonder") ya da bilgisayarin panosunu
+  telefonuna cekebilirsiniz ("Panosunu Al").
 - **Paylasim (Share) entegrasyonu**: baska bir uygulamada (orn. YouTube,
   tarayici) bir linki "Paylas" menusunden "AI Kedi Asistani"na
   gonderirseniz, uygulama acilip "Bilgisayarda Ac" paneli o linkle dolu
