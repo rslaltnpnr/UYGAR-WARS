@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Surum etiketi (orn. v1.1.0) - tag olmadan elle tetiklerken gerekli'
+        required: true
 
 permissions:
   contents: write
@@ -45,6 +50,7 @@ jobs:
       - name: GitHub Release olustur
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
           files: |
             ai_desktop_assistant/dist/AI-Kedi-Asistani.exe
             ai_desktop_assistant/dist/AI-Kedi-Asistani.exe.sha256
