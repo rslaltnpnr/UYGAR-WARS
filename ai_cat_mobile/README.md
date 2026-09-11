@@ -30,6 +30,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   uygulamasinin sag tik menusundeki "Uzaktan Kumanda Bilgisi"nden IP,
   port ve PIN'i alip bu panelde bir kez girmeniz yeterli. YouTube,
   YouTube Music, Spotify ve Google icin hazir baglanti butonlari da var.
+  **Birden fazla bilgisayarla** (orn. "Ev", "Is") eslesip aralarinda
+  gecis yapabilirsiniz - her biri kendi IP/port/PIN/sertifika kaydini
+  tasir.
   Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
   sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
   parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere

@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/remote_profile.dart';
 
 /// Ayarlari (API anahtari, kedi ismi, model adi) cihazda saklar.
 ///
@@ -10,10 +14,15 @@ class SettingsService {
   static const _keyApiKey = 'gemini_api_key';
   static const _keyCharacterName = 'character_name';
   static const _keyModelName = 'model_name';
+  // Eski (tek bilgisayarli) uzaktan kumanda alanlari - artik dogrudan
+  // kullanilmiyor, yalnizca ilk kez birden fazla bilgisayar profiline
+  // gecerken tek seferlik gocu (migration) icin okunuyor.
   static const _keyDesktopIp = 'desktop_ip';
   static const _keyDesktopPort = 'desktop_port';
   static const _keyDesktopPin = 'desktop_pin';
   static const _keyDesktopCertFingerprint = 'desktop_cert_fingerprint';
+  static const _keyRemoteProfiles = 'remote_profiles';
+  static const _keyActiveProfileId = 'active_profile_id';
   static const _keyThemeMode = 'theme_mode';
 
   final SharedPreferences _prefs;
@@ -30,24 +39,56 @@ class SettingsService {
       _prefs.getString(_keyModelName) ?? 'gemini-flash-latest';
   set modelName(String value) => _prefs.setString(_keyModelName, value);
 
-  /// Masaustu uygulamasinin (ai_desktop_assistant) yerel ag IP adresi,
-  /// port ve PIN'i - "Bilgisayari Kumanda Et" panelinden set edilir.
-  String get desktopIp => _prefs.getString(_keyDesktopIp) ?? '';
-  set desktopIp(String value) => _prefs.setString(_keyDesktopIp, value);
+  /// Eslestirilmis bilgisayarlarin listesi (ev/is gibi birden fazla
+  /// bilgisayarla eslesip aralarinda gecis yapilabilir). Ilk okumada,
+  /// eski tek-bilgisayarli kurulumdan kalma alanlar varsa bunlari otomatik
+  /// olarak tek bir profile donusturur.
+  List<RemoteProfile> get remoteProfiles {
+    final raw = _prefs.getString(_keyRemoteProfiles);
+    if (raw == null) return _migrateLegacyProfile();
+    try {
+      final list = jsonDecode(raw) as List;
+      return list
+          .map((e) => RemoteProfile.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
-  int get desktopPort => _prefs.getInt(_keyDesktopPort) ?? 8765;
-  set desktopPort(int value) => _prefs.setInt(_keyDesktopPort, value);
+  set remoteProfiles(List<RemoteProfile> profiles) {
+    _prefs.setString(
+      _keyRemoteProfiles,
+      jsonEncode(profiles.map((p) => p.toJson()).toList()),
+    );
+  }
 
-  String get desktopPin => _prefs.getString(_keyDesktopPin) ?? '';
-  set desktopPin(String value) => _prefs.setString(_keyDesktopPin, value);
+  String? get activeProfileId => _prefs.getString(_keyActiveProfileId);
 
-  /// Ilk baglantida (TOFU) kaydedilen sunucu TLS sertifikasinin SHA-256
-  /// parmak izi. Sonraki baglantilarda bununla karsilastirilir; bos ise
-  /// henuz eslestirme yapilmamis demektir.
-  String get desktopCertFingerprint =>
-      _prefs.getString(_keyDesktopCertFingerprint) ?? '';
-  set desktopCertFingerprint(String value) =>
-      _prefs.setString(_keyDesktopCertFingerprint, value);
+  set activeProfileId(String? id) {
+    if (id == null) {
+      _prefs.remove(_keyActiveProfileId);
+    } else {
+      _prefs.setString(_keyActiveProfileId, id);
+    }
+  }
+
+  List<RemoteProfile> _migrateLegacyProfile() {
+    final legacyIp = _prefs.getString(_keyDesktopIp) ?? '';
+    if (legacyIp.isEmpty) return [];
+    final profile = RemoteProfile(
+      id: 'legacy',
+      name: 'Bilgisayar',
+      ip: legacyIp,
+      port: _prefs.getInt(_keyDesktopPort) ?? 8765,
+      pin: _prefs.getString(_keyDesktopPin) ?? '',
+      certFingerprint: _prefs.getString(_keyDesktopCertFingerprint) ?? '',
+    );
+    final profiles = [profile];
+    remoteProfiles = profiles;
+    activeProfileId = profile.id;
+    return profiles;
+  }
 
   /// Varsayilan 'dark' - uygulamanin onceki (tek secenekli) koyu gorunumunu
   /// korur; kullanici acik moda ya da sistem temasina gecebilir.
