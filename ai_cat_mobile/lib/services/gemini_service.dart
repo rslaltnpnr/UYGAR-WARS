@@ -2,13 +2,26 @@ import 'dart:typed_data';
 
 import 'package:google_generative_ai/google_generative_ai.dart';
 
+/// Gemini isteklerinde olusan hatalari kullanici dostu, kisa bir Turkce
+/// mesaja cevirir; sohbet panelinde ham SDK/HTTP hatasi yerine bu
+/// gosterilir.
+class GeminiRequestException implements Exception {
+  final String message;
+
+  GeminiRequestException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 /// Google Gemini'ye ekran/galeri goruntusu + soru gonderir.
 ///
 /// Masaustu surumundeki gibi: gecici asiri yuklenme (503) hatalarinda
 /// kisa bir bekleme ile tekrar dener; ana model kaldirilmis/bulunamiyorsa
 /// (404) veya ucretsiz kota (429) doluysa otomatik olarak yedek modele
 /// gecer. Kota hatasinda Gemini'nin "Please retry in Ns" mesajindaki
-/// bekleme suresi kullanilir.
+/// bekleme suresi kullanilir. Tum denemeler basarisiz olursa ham hata
+/// yerine kisa, okunakli bir mesaj firlatilir.
 class GeminiService {
   static const fallbackModel = 'gemini-3.6-flash';
   static const _defaultQuotaWait = Duration(seconds: 5);
@@ -40,6 +53,7 @@ class GeminiService {
     }
     final content = [Content.multi(parts)];
 
+    Object finalError;
     try {
       final response = await _generateWithRetry(
         apiKey: apiKey,
@@ -50,25 +64,27 @@ class GeminiService {
       );
       return _extractText(response);
     } catch (primaryError) {
+      finalError = primaryError;
       final shouldFallback = modelName != fallbackModel &&
           (_isOverloadError(primaryError) ||
               _isModelRetiredError(primaryError) ||
               _isQuotaError(primaryError));
-      if (!shouldFallback) rethrow;
-      try {
-        final response = await _generateWithRetry(
-          apiKey: apiKey,
-          modelName: fallbackModel,
-          systemInstruction: persona,
-          content: content,
-          maxAttempts: 2,
-        );
-        return _extractText(response);
-      } catch (_) {
-        // Yedek model de basarisiz oldu; kullaniciya orijinal hatayi goster.
-        rethrow;
+      if (shouldFallback) {
+        try {
+          final response = await _generateWithRetry(
+            apiKey: apiKey,
+            modelName: fallbackModel,
+            systemInstruction: persona,
+            content: content,
+            maxAttempts: 2,
+          );
+          return _extractText(response);
+        } catch (fallbackError) {
+          finalError = fallbackError;
+        }
       }
     }
+    throw GeminiRequestException(_friendlyMessage(finalError));
   }
 
   String _extractText(GenerateContentResponse response) {
@@ -110,6 +126,25 @@ class GeminiService {
     throw StateError('generateContent hicbir deneme yapmadan basarisiz oldu.');
   }
 
+  String _friendlyMessage(Object exc) {
+    if (_isQuotaError(exc)) {
+      return 'Şu an çok fazla istek yapıldı ve ücretsiz kullanım kotası '
+          'doldu. Birkaç saniye bekleyip tekrar dener misin?';
+    }
+    if (_isOverloadError(exc)) {
+      return 'Google\'ın sunucuları şu an yoğun. Birazdan tekrar dener misin?';
+    }
+    if (_isModelRetiredError(exc)) {
+      return 'Kullanılan yapay zeka modeli güncellenmiş görünüyor. '
+          'Lütfen tekrar dener misin?';
+    }
+    if (_isNetworkError(exc)) {
+      return 'İnternet bağlantısı kurulamadı. Bağlantını kontrol edip '
+          'tekrar dener misin?';
+    }
+    return 'Bir şeyler ters gitti, tekrar dener misin?';
+  }
+
   bool _isOverloadError(Object exc) {
     final text = exc.toString().toLowerCase();
     return text.contains('503') ||
@@ -129,6 +164,15 @@ class GeminiService {
     return text.contains('429') ||
         text.contains('quota') ||
         text.contains('resource_exhausted');
+  }
+
+  bool _isNetworkError(Object exc) {
+    final text = exc.toString().toLowerCase();
+    return text.contains('socketexception') ||
+        text.contains('failed host lookup') ||
+        text.contains('network is unreachable') ||
+        text.contains('connection refused') ||
+        text.contains('connection closed');
   }
 
   Duration? _parseRetryAfter(Object exc) {
