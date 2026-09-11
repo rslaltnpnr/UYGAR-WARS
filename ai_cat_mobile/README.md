@@ -12,7 +12,8 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   dusunurken, mutlu, hata - masaustu suruumuyle ayni 5 gorsel).
 - Kediye **dokununca** metin ve/veya fotograf (galeri ya da kamera)
   ile soru sorabileceginiz bir sohbet paneli aciliyor.
-- Kediyi **uzun basinca** ayarlar (kedi ismi, Gemini API Key) aciliyor.
+- Kediyi **uzun basinca** ayarlar (kedi ismi, Gemini API Key, **acik/koyu/
+  sistem temasi**) aciliyor. Tema tercihi cihazda saklanir.
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
   goruntulenip temizlenebiliyor.

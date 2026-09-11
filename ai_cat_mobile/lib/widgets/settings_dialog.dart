@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../services/settings_service.dart';
+import '../theme/app_colors.dart';
 
 /// Kediyi uzun basinca acilan ayarlar penceresi (masaustu surumundeki
 /// sag tik menusunun "Kediye Isim Ver" + "Gemini API Key Ayarlari"
 /// karsiligi).
 class SettingsDialog extends StatefulWidget {
   final SettingsService settings;
+  final ValueChanged<ThemeMode> onThemeModeChanged;
 
-  const SettingsDialog({super.key, required this.settings});
+  const SettingsDialog({
+    super.key,
+    required this.settings,
+    required this.onThemeModeChanged,
+  });
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -17,6 +23,7 @@ class SettingsDialog extends StatefulWidget {
 class _SettingsDialogState extends State<SettingsDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _apiKeyController;
+  late ThemeMode _themeMode;
   bool _obscureKey = true;
 
   @override
@@ -26,6 +33,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       text: widget.settings.characterName,
     );
     _apiKeyController = TextEditingController(text: widget.settings.apiKey);
+    _themeMode = widget.settings.themeMode;
   }
 
   @override
@@ -41,41 +49,72 @@ class _SettingsDialogState extends State<SettingsDialog> {
       widget.settings.characterName = name;
     }
     widget.settings.apiKey = _apiKeyController.text.trim();
+    widget.settings.themeMode = _themeMode;
+    widget.onThemeModeChanged(_themeMode);
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E28),
-      title: const Text('Ayarlar', style: TextStyle(color: Colors.white)),
+      backgroundColor: colors.panel,
+      title: Text('Ayarlar', style: TextStyle(color: colors.textPrimary)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
             controller: _nameController,
-            style: const TextStyle(color: Colors.white),
-            decoration: const InputDecoration(
+            style: TextStyle(color: colors.textPrimary),
+            decoration: InputDecoration(
               labelText: 'Kedi ismi',
-              labelStyle: TextStyle(color: Colors.white70),
+              labelStyle: TextStyle(color: colors.textSecondary),
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _apiKeyController,
             obscureText: _obscureKey,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: colors.textPrimary),
             decoration: InputDecoration(
               labelText: 'Gemini API Key',
-              labelStyle: const TextStyle(color: Colors.white70),
+              labelStyle: TextStyle(color: colors.textSecondary),
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscureKey ? Icons.visibility : Icons.visibility_off,
-                  color: Colors.white70,
+                  color: colors.textSecondary,
                 ),
                 onPressed: () => setState(() => _obscureKey = !_obscureKey),
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text('Tema', style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+          ),
+          const SizedBox(height: 6),
+          SegmentedButton<ThemeMode>(
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.system,
+                label: Text('Sistem'),
+                icon: Icon(Icons.brightness_auto),
+              ),
+              ButtonSegment(
+                value: ThemeMode.light,
+                label: Text('Açık'),
+                icon: Icon(Icons.light_mode),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                label: Text('Koyu'),
+                icon: Icon(Icons.dark_mode),
+              ),
+            ],
+            selected: {_themeMode},
+            onSelectionChanged: (selection) =>
+                setState(() => _themeMode = selection.first),
           ),
         ],
       ),

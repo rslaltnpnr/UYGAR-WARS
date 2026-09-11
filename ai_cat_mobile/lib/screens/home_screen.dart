@@ -8,6 +8,7 @@ import '../models/chat_entry.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
 import '../services/settings_service.dart';
+import '../theme/app_colors.dart';
 import '../widgets/cat_sprite.dart';
 import '../widgets/chat_sheet.dart';
 import '../widgets/reminder_dialog.dart';
@@ -16,7 +17,9 @@ import '../widgets/roaming_cat.dart';
 import '../widgets/settings_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final ValueChanged<ThemeMode> onThemeModeChanged;
+
+  const HomeScreen({super.key, required this.onThemeModeChanged});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -107,7 +110,10 @@ class _HomeScreenState extends State<HomeScreen> {
     if (settings == null) return;
     showDialog(
       context: context,
-      builder: (_) => SettingsDialog(settings: settings),
+      builder: (_) => SettingsDialog(
+        settings: settings,
+        onThemeModeChanged: widget.onThemeModeChanged,
+      ),
     ).then(
       (_) => setState(() {}),
     ); // isim degismis olabilir, baslik guncellensin
@@ -191,13 +197,11 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (_settings == null || _history == null) {
       return const Scaffold(
-        backgroundColor: Color(0xFF14141C),
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF14141C),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -220,7 +224,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: 8,
                   right: 8,
                   child: IconButton(
-                    icon: const Icon(Icons.settings, color: Colors.white54),
+                    icon: Icon(Icons.settings, color: context.colors.textMuted),
                     onPressed: _openSettings,
                   ),
                 ),
@@ -228,9 +232,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: 8,
                   right: 48,
                   child: IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.desktop_windows,
-                      color: Colors.white54,
+                      color: context.colors.textMuted,
                     ),
                     tooltip: 'Bilgisayarı Kumanda Et',
                     onPressed: _openRemoteControl,
@@ -240,9 +244,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   top: 8,
                   right: 88,
                   child: IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.alarm_add,
-                      color: Colors.white54,
+                      color: context.colors.textMuted,
                     ),
                     tooltip: 'Hatırlatıcı Kur',
                     onPressed: _openReminderDialog,
@@ -253,7 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   left: 16,
                   child: Text(
                     _settings!.characterName,
-                    style: const TextStyle(color: Colors.white38, fontSize: 13),
+                    style: TextStyle(color: context.colors.textMuted, fontSize: 13),
                   ),
                 ),
               ],

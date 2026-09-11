@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/chat_entry.dart';
 import '../services/history_service.dart';
 import '../services/settings_service.dart';
+import '../theme/app_colors.dart';
 
 /// Kediye dokununca acilan, metin ve/veya foto ile soru sorulabilen panel.
 /// Gecmis girisleri [HistoryService]'ten yuklenir; yeni sorular
@@ -112,15 +113,16 @@ class _ChatSheetState extends State<ChatSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
       minChildSize: 0.4,
       maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Color(0xE61E1E28),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: colors.panelTranslucent,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           padding: EdgeInsets.fromLTRB(
             16,
@@ -135,8 +137,8 @@ class _ChatSheetState extends State<ChatSheet> {
                   Expanded(
                     child: Text(
                       '\u{1F431} ${widget.settings.characterName}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colors.textPrimary,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),
@@ -144,26 +146,26 @@ class _ChatSheetState extends State<ChatSheet> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.delete_outline,
-                      color: Colors.white70,
+                      color: colors.textSecondary,
                     ),
                     tooltip: 'Gecmisi Temizle',
                     onPressed: _entries.isEmpty ? null : _clearHistory,
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
+                    icon: Icon(Icons.close, color: colors.textSecondary),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
               ),
-              const Divider(color: Colors.white24, height: 1),
+              Divider(color: colors.divider, height: 1),
               Expanded(
                 child: _entries.isEmpty
-                    ? const Center(
+                    ? Center(
                         child: Text(
                           'Henuz bir sohbet gecmisi yok.',
-                          style: TextStyle(color: Colors.white38),
+                          style: TextStyle(color: colors.textMuted),
                         ),
                       )
                     : ListView.builder(
@@ -182,16 +184,16 @@ class _ChatSheetState extends State<ChatSheet> {
               Row(
                 children: [
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.photo_library,
-                      color: Colors.white70,
+                      color: colors.textSecondary,
                     ),
                     tooltip: 'Galeriden Sec',
                     onPressed:
                         _busy ? null : () => _pickImage(ImageSource.gallery),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.camera_alt, color: Colors.white70),
+                    icon: Icon(Icons.camera_alt, color: colors.textSecondary),
                     tooltip: 'Fotograf Cek',
                     onPressed:
                         _busy ? null : () => _pickImage(ImageSource.camera),
@@ -200,31 +202,31 @@ class _ChatSheetState extends State<ChatSheet> {
                     child: TextField(
                       controller: _controller,
                       enabled: !_busy,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(
+                      style: TextStyle(color: colors.textPrimary),
+                      decoration: InputDecoration(
                         hintText: 'Bir soru yaz...',
-                        hintStyle: TextStyle(color: Colors.white38),
+                        hintStyle: TextStyle(color: colors.textMuted),
                         border: InputBorder.none,
                       ),
                       onSubmitted: (_) => _send(),
                     ),
                   ),
                   _busy
-                      ? const Padding(
-                          padding: EdgeInsets.all(10),
+                      ? Padding(
+                          padding: const EdgeInsets.all(10),
                           child: SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Colors.white70,
+                              color: colors.textSecondary,
                             ),
                           ),
                         )
                       : IconButton(
-                          icon: const Icon(
+                          icon: Icon(
                             Icons.send,
-                            color: Color(0xFF5AAAFF),
+                            color: colors.accent,
                           ),
                           onPressed: _send,
                         ),
@@ -260,14 +262,14 @@ class _PendingImagePreview extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Text(
               'Gorsel eklendi',
-              style: TextStyle(color: Colors.white70, fontSize: 12),
+              style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, size: 18, color: Colors.white70),
+            icon: Icon(Icons.close, size: 18, color: context.colors.textSecondary),
             onPressed: onRemove,
           ),
         ],
@@ -283,6 +285,7 @@ class _EntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Column(
@@ -290,13 +293,13 @@ class _EntryTile extends StatelessWidget {
         children: [
           Text(
             'Sen: ${entry.question}',
-            style: const TextStyle(color: Colors.white70, fontSize: 13),
+            style: TextStyle(color: colors.textSecondary, fontSize: 13),
           ),
           const SizedBox(height: 2),
           Text(
             '${entry.isError ? "⚠" : "\u{1F431}"} ${entry.answer}',
             style: TextStyle(
-              color: entry.isError ? const Color(0xFFFF8080) : Colors.white,
+              color: entry.isError ? colors.error : colors.textPrimary,
               fontSize: 13,
             ),
           ),
