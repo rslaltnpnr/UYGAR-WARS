@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../services/backup_service.dart';
 import '../services/settings_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_colors.dart';
 import 'about_dialog.dart';
 
@@ -53,6 +56,55 @@ class _SettingsDialogState extends State<SettingsDialog> {
     widget.settings.themeMode = _themeMode;
     widget.onThemeModeChanged(_themeMode);
     Navigator.of(context).pop();
+  }
+
+  Future<void> _shareBackup() async {
+    try {
+      await BackupService().shareBackup();
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Yedek oluşturulamadı: $exc')),
+      );
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Güncellemeler kontrol ediliyor...')),
+    );
+    final info = await UpdateService().checkForUpdate();
+    if (!mounted) return;
+    if (info == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Güncel sürümü kullanıyorsunuz.')),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Yeni Sürüm Var'),
+        content: Text('${info.tag} sürümü yayınlandı.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Kapat'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              launchUrl(
+                Uri.parse(info.apkDownloadUrl ?? info.htmlUrl),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            child: const Text('İndir'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -116,6 +168,43 @@ class _SettingsDialogState extends State<SettingsDialog> {
             selected: {_themeMode},
             onSelectionChanged: (selection) =>
                 setState(() => _themeMode = selection.first),
+          ),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Yedekleme',
+              style: TextStyle(color: colors.textSecondary, fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _shareBackup,
+                  icon: const Icon(Icons.upload_file, size: 18),
+                  label: const Text('Yedek Al'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _checkForUpdate,
+                  icon: const Icon(Icons.system_update, size: 18),
+                  label: const Text('Güncelleme Kontrol'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Geri yüklemek için yedek dosyasını bir dosya yöneticisinden '
+              'bu uygulamaya "Paylaş" ile gönderin.',
+              style: TextStyle(color: colors.textMuted, fontSize: 11),
+            ),
           ),
         ],
       ),

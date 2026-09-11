@@ -60,6 +60,18 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   bir bildirim gosterir. Bulut/Firebase kullanmaz - tamamen ayni Wi-Fi
   agi uzerinden calisir; bilgisayara ulasilamiyorsa (kapali, farkli ag)
   sessizce yok sayar.
+- **Yedekleme / geri yukleme**: Ayarlar penceresindeki "Yedek Al" ile
+  ayarlarinizi, uzaktan kumanda profillerinizi ve sohbet gecmisinizi tek
+  bir JSON dosyasi olarak paylasabilirsiniz (Dosyalar/Drive/e-posta vb.
+  herhangi bir yere kaydedebilirsiniz - **API anahtarinizi ve PIN'lerinizi
+  duz metin icerir, guvenli saklayin**). Geri yuklemek icin bu dosyayi bir
+  dosya yoneticisinden "Paylas" ile tekrar uygulamaya gonderin; onay
+  sorulduktan sonra mevcut verilerin uzerine yazilir.
+- **Guncelleme kontrolu**: Ayarlar penceresindeki "Guncelleme Kontrol" ile
+  GitHub'daki en son surumu sorgular; daha yeni bir surum varsa APK'yi
+  (ya da release sayfasini) tarayicida acar - kurulum icin "Bilinmeyen
+  kaynaklardan yukleme" izni gerekebilir (masaustu suruumunun aksine,
+  Android'de guvenlik nedeniyle otomatik arka plan kurulumu yapilmaz).
 
 ## 1) Gerekli araclari kurun (Windows)
 
@@ -124,6 +136,29 @@ APK'lar da alabilirsiniz:
 ```powershell
 flutter build apk --release --split-per-abi
 ```
+
+## Yeni bir surum yayinlama (otomatik guncelleme icin)
+
+Uygulama ici "Guncelleme Kontrol" ozelliginin bir seyle karsilastirabilmesi
+icin GitHub'da bir release olmasi gerekir. Bunu elle derleyip yuklemenize
+gerek yok - `.github/workflows/release-mobile.yml` bunu otomatik yapar:
+
+1. `pubspec.yaml` icindeki `version:` alanini yeni surume guncelleyin
+   (orn. `1.2.0+1`) ve bunu `main`'e mergeleyin.
+2. Ayni surumle bir git etiketi (tag) olusturup gonderin:
+
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+
+3. Bu, `ubuntu-latest` bir runner'da otomatik olarak `flutter build apk
+   --release` ile APK'yi derler ve bir GitHub Release'e ekler. Birkaç
+   dakika icinde hem release sayfasinda hem de uygulama ici guncelleme
+   kontrolunde gorunur.
+
+Etiket adi `v` ile baslamali (orn. `v1.2.0`) - surum karsilastirma mantigi
+bunu bekler.
 
 ## Notlar
 
