@@ -18,7 +18,11 @@ karakteri (PyQt6).
   saglayabilirsiniz (orn. bir YouTube linki -> muzik/video calar).
   Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port, PIN ve sertifika
   parmak izini gorursunuz; bunlari telefon uygulamasindaki "Bilgisayari
-  Kumanda Et" panelinde bir kez girmeniz yeterli.
+  Kumanda Et" panelinde bir kez girmeniz yeterli. Baglanti ac(-mak)nin
+  yaninda: **medya kontrolu** (oynat/duraklat, ileri/geri, ses), bilgisayari
+  **kilitleme/uyku moduna alma** ve kucultulmus bir **ekran goruntusu**
+  isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim
+  sistemlerinde bu komutlar sessizce hicbir sey yapmaz).
   - Sunucu **HTTPS (TLS)** uzerinden calisir; ilk calistirmada otomatik
     olarak kendinden imzali bir sertifika (`remote_cert.pem`/
     `remote_key.pem`, `.gitignore`'da - asla paylasmayin/commitlemeyin)
