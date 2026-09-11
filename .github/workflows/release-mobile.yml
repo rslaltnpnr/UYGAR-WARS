@@ -42,11 +42,36 @@ jobs:
       - name: Testleri calistir
         run: flutter test
 
+      # ANDROID_KEYSTORE_BASE64 secret'i tanimli degilse bu adim atlanir ve
+      # build.gradle.kts release build'i debug anahtariyla imzalar - APK
+      # yine uretilir ama bir onceki surumun uzerine kurulumda imza
+      # uyusmazligi yasanir. Kalici bir imza icin repo Settings > Secrets'a
+      # ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS
+      # eklenmelidir (bkz. README).
+      - name: Imzalama anahtarini hazirla (varsa)
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEYSTORE_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=${{ github.workspace }}/ai_cat_mobile/android/upload-keystore.jks
+          EOF
+
       - name: APK derle
         run: flutter build apk --release
 
       - name: APK'yi surum dosyasi olarak adlandir
         run: cp build/app/outputs/flutter-apk/app-release.apk ai-kedi-asistani.apk
+
+      - name: Imzalama anahtarini temizle
+        if: always()
+        run: rm -f android/upload-keystore.jks android/key.properties
 
       - name: GitHub Release olustur
         uses: softprops/action-gh-release@v2
