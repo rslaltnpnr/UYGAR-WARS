@@ -10,6 +10,7 @@ import '../services/history_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/cat_sprite.dart';
 import '../widgets/chat_sheet.dart';
+import '../widgets/reminder_dialog.dart';
 import '../widgets/remote_control_sheet.dart';
 import '../widgets/roaming_cat.dart';
 import '../widgets/settings_dialog.dart';
@@ -124,6 +125,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _openReminderDialog() async {
+    _registerActivity();
+    final minutes = await showDialog<int>(
+      context: context,
+      builder: (_) => const ReminderDialog(),
+    );
+    if (minutes != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$minutes dakika sonra hatırlatılacak.')),
+      );
+    }
+  }
+
   Future<String> _handleQuestion(String question, Uint8List? imageBytes) async {
     final settings = _settings!;
     final history = _history!;
@@ -220,6 +234,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     tooltip: 'Bilgisayarı Kumanda Et',
                     onPressed: _openRemoteControl,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 88,
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.alarm_add,
+                      color: Colors.white54,
+                    ),
+                    tooltip: 'Hatırlatıcı Kur',
+                    onPressed: _openReminderDialog,
                   ),
                 ),
                 Positioned(

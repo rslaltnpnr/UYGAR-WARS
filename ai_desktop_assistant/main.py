@@ -1323,6 +1323,51 @@ class CatCharacter(QWidget):
             self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
             self._show_remote_info()
 
+    # -- hatirlatici --------------------------------------------------------
+
+    def _create_reminder(self):
+        self._register_activity()
+        minutes, ok = QInputDialog.getInt(
+            self, "Hatirlatici Kur", "Kac dakika sonra hatirlatilsin?", 5, 1, 1440
+        )
+        if not ok:
+            return
+        text, ok = QInputDialog.getText(
+            self, "Hatirlatici Kur", "Hatirlatma mesaji (bos birakabilirsiniz):"
+        )
+        if not ok:
+            return
+        text = text.strip() or "Hatirlatma zamani!"
+
+        QTimer.singleShot(minutes * 60 * 1000, lambda: self._fire_reminder(text))
+
+        if self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                "Hatirlatici Kuruldu",
+                f"{minutes} dakika sonra hatirlatilacaksiniz.",
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
+        else:
+            QMessageBox.information(
+                self, "Hatirlatici Kuruldu", f"{minutes} dakika sonra hatirlatilacaksiniz."
+            )
+
+    def _fire_reminder(self, text):
+        self._register_activity()
+        self.revert_timer.stop()
+        self._set_state("smile")
+        self.revert_timer.start(REVERT_TO_NORMAL_MS)
+        if self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                f"{self.config.get('character_name')} Hatirlatiyor",
+                text,
+                QSystemTrayIcon.MessageIcon.Information,
+                10000,
+            )
+        else:
+            QMessageBox.information(self, "Hatirlatma", text)
+
     # -- guncelleme kontrolu ----------------------------------------------
 
     def _check_for_updates(self, manual=False):
@@ -1451,6 +1496,10 @@ class CatCharacter(QWidget):
         remote_action = QAction("Uzaktan Kumanda Bilgisi", self)
         remote_action.triggered.connect(self._show_remote_info)
         menu.addAction(remote_action)
+
+        reminder_action = QAction("Hatirlatici Kur", self)
+        reminder_action.triggered.connect(self._create_reminder)
+        menu.addAction(reminder_action)
 
         autostart_action = QAction("Windows ile Baslat", self)
         autostart_action.setCheckable(True)
