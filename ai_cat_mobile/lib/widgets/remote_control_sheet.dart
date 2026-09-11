@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../models/remote_profile.dart';
 import '../services/remote_control_service.dart';
@@ -361,6 +362,87 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     }
   }
 
+  Future<void> _pushClipboard() async {
+    if (_busy || _activeProfile == null) return;
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = clipboardData?.text ?? '';
+    if (text.isEmpty) {
+      setState(() {
+        _status = 'Panonda gönderilecek metin yok.';
+        _statusIsError = true;
+      });
+      return;
+    }
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.pushClipboard(
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
+        text: text,
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
+      );
+      _updateActiveFingerprint(result.fingerprint);
+      if (!mounted) return;
+      setState(() {
+        _status = 'Pano bilgisayara gönderildi.';
+        _statusIsError = false;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _pullClipboard() async {
+    if (_busy || _activeProfile == null) return;
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.pullClipboard(
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
+      );
+      _updateActiveFingerprint(result.fingerprint);
+      if (result.text.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _status = 'Bilgisayarın panosu boş.';
+          _statusIsError = false;
+        });
+        return;
+      }
+      await Clipboard.setData(ClipboardData(text: result.text));
+      if (!mounted) return;
+      setState(() {
+        _status = 'Bilgisayarın panosu telefonuna kopyalandı.';
+        _statusIsError = false;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
@@ -582,6 +664,31 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                     onPressed: _busy ? null : _takeScreenshot,
                     icon: const Icon(Icons.screenshot_monitor),
                     label: const Text('Ekran Görüntüsü Al'),
+                  ),
+                  Divider(color: colors.divider, height: 32),
+                  Text(
+                    'Pano Senkronizasyonu',
+                    style: TextStyle(color: colors.textMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _pushClipboard,
+                          icon: const Icon(Icons.upload_outlined),
+                          label: const Text('Panomu Gönder'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _pullClipboard,
+                          icon: const Icon(Icons.download_outlined),
+                          label: const Text('Panosunu Al'),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
                 if (_status != null) ...[

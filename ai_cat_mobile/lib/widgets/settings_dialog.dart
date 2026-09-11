@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
+import 'about_dialog.dart';
 
 /// Kediyi uzun basinca acilan ayarlar penceresi (masaustu surumundeki
 /// sag tik menusunun "Kediye Isim Ver" + "Gemini API Key Ayarlari"
@@ -119,6 +120,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ],
       ),
       actions: [
+        TextButton(
+          onPressed: () => showDialog(
+            context: context,
+            builder: (_) => const AboutAppDialog(),
+          ),
+          child: const Text('Hakkında'),
+        ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Iptal'),

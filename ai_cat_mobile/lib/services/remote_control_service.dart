@@ -45,6 +45,15 @@ class HistoryFetchResult {
   const HistoryFetchResult(this.fingerprint, this.entries);
 }
 
+/// [fetchClipboard] sonucu: parmak izinin yani sira bilgisayarin panosundaki
+/// metni tasir.
+class ClipboardFetchResult {
+  final String fingerprint;
+  final String text;
+
+  const ClipboardFetchResult(this.fingerprint, this.text);
+}
+
 /// [fetchAlerts] sonucu: parmak izinin yani sira `since_id`'den sonraki
 /// hata/uyari kayitlarini (id, time, message) tasir.
 class AlertsFetchResult {
@@ -314,6 +323,56 @@ class RemoteControlService {
       return AlertsFetchResult(response.fingerprint, alerts);
     } catch (_) {
       throw RemoteControlException('Uyarılar okunamadı.');
+    }
+  }
+
+  Future<RemoteControlResult> pushClipboard({
+    required String ip,
+    required int port,
+    required String pin,
+    required String text,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/clipboard',
+      body: {'pin': pin, 'action': 'push', 'text': text},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    return RemoteControlResult(response.fingerprint);
+  }
+
+  Future<ClipboardFetchResult> pullClipboard({
+    required String ip,
+    required int port,
+    required String pin,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/clipboard',
+      body: {'pin': pin, 'action': 'pull'},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      return ClipboardFetchResult(response.fingerprint, data['text'] as String? ?? '');
+    } catch (_) {
+      throw RemoteControlException('Pano okunamadı.');
     }
   }
 
