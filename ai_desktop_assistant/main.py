@@ -14,6 +14,7 @@ Dosyanin en altinda PyInstaller ile tek dosya (.exe) yapma adimlari
 yer alir.
 """
 
+import hmac
 import http.server
 import json
 import os
@@ -24,13 +25,14 @@ import time
 import webbrowser
 from datetime import datetime
 
-from PyQt6.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QPoint, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
     QAction,
     QActionGroup,
     QBrush,
     QColor,
     QFont,
+    QIcon,
     QPainter,
     QPen,
     QPixmap,
@@ -43,6 +45,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
+    QSystemTrayIcon,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -91,6 +94,8 @@ STATE_FILES = {
 }
 
 REMOTE_SERVER_PORT = 8765
+REMOTE_MAX_FAILED_ATTEMPTS = 5
+REMOTE_LOCKOUT_SECONDS = 60
 
 DEFAULT_CONFIG = {
     "character_name": "Fuff",
@@ -278,6 +283,10 @@ class RemoteCommandServer(QThread):
     def run(self):
         config = self.config
         signal = self.command_received
+        # IP -> {"count": basarisiz deneme sayisi, "blocked_until": epoch}
+        # Kaba kuvvetle PIN denemeyi yavaslatmak icin bellek ici, basit bir
+        # kilitlenme mekanizmasi (kalici loglama yapilmiyor).
+        failed_attempts = {}
 
         class Handler(http.server.BaseHTTPRequestHandler):
             def log_message(self, format_str, *args):
@@ -295,6 +304,17 @@ class RemoteCommandServer(QThread):
                 if self.path != "/open":
                     self._send_json(404, {"error": "bulunamadi"})
                     return
+
+                client_ip = self.client_address[0]
+                record = failed_attempts.get(client_ip)
+                if record and time.time() < record["blocked_until"]:
+                    remaining = int(record["blocked_until"] - time.time())
+                    self._send_json(
+                        429,
+                        {"error": f"cok fazla yanlis deneme, {remaining} saniye sonra tekrar deneyin"},
+                    )
+                    return
+
                 try:
                     length = int(self.headers.get("Content-Length", 0))
                     data = json.loads(self.rfile.read(length))
@@ -302,9 +322,18 @@ class RemoteCommandServer(QThread):
                     self._send_json(400, {"error": "gecersiz istek govdesi"})
                     return
 
-                if str(data.get("pin", "")) != str(config.get("remote_pin")):
+                submitted_pin = str(data.get("pin", ""))
+                expected_pin = str(config.get("remote_pin"))
+                if not hmac.compare_digest(submitted_pin, expected_pin):
+                    record = failed_attempts.setdefault(client_ip, {"count": 0, "blocked_until": 0.0})
+                    record["count"] += 1
+                    if record["count"] >= REMOTE_MAX_FAILED_ATTEMPTS:
+                        record["blocked_until"] = time.time() + REMOTE_LOCKOUT_SECONDS
+                        record["count"] = 0
                     self._send_json(401, {"error": "gecersiz pin"})
                     return
+
+                failed_attempts.pop(client_ip, None)
 
                 url = str(data.get("url", "")).strip()
                 if not url.startswith(("http://", "https://")):
@@ -324,6 +353,95 @@ class RemoteCommandServer(QThread):
     def stop(self):
         if self._httpd is not None:
             self._httpd.shutdown()
+
+
+# --------------------------------------------------------------------------
+# Windows ile otomatik baslatma (baslangic klasoru yerine Run registry anahtari)
+# --------------------------------------------------------------------------
+
+AUTOSTART_VALUE_NAME = "AI Kedi Asistani"
+
+
+def _autostart_command():
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}"'
+    return f'"{sys.executable}" "{os.path.abspath(__file__)}"'
+
+
+def is_autostart_enabled():
+    if sys.platform != "win32":
+        return False
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ
+        )
+        try:
+            value, _ = winreg.QueryValueEx(key, AUTOSTART_VALUE_NAME)
+            return value == _autostart_command()
+        finally:
+            winreg.CloseKey(key)
+    except OSError:
+        return False
+
+
+def set_autostart(enabled):
+    if sys.platform != "win32":
+        return
+    try:
+        import winreg
+
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE
+        )
+        try:
+            if enabled:
+                winreg.SetValueEx(key, AUTOSTART_VALUE_NAME, 0, winreg.REG_SZ, _autostart_command())
+            else:
+                try:
+                    winreg.DeleteValue(key, AUTOSTART_VALUE_NAME)
+                except FileNotFoundError:
+                    pass
+        finally:
+            winreg.CloseKey(key)
+    except OSError:
+        pass
+
+
+# --------------------------------------------------------------------------
+# Genel (uygulama odakta olmasa da calisan) klavye kisayolu
+# --------------------------------------------------------------------------
+
+HOTKEY_COMBO = "ctrl+shift+k"
+
+
+class HotkeySignal(QObject):
+    """
+    keyboard kutuphanesi kendi arka plan thread'inde calisir; bu QObject
+    Qt'nin sinyal/slot mekanizmasiyla tetiklemeyi ana/GUI thread'ine
+    guvenli sekilde tasir.
+    """
+
+    triggered = pyqtSignal()
+
+
+def register_global_hotkey(callback):
+    """
+    HOTKEY_COMBO tuş bileşimini global olarak dinler ve tetiklendiginde
+    callback'i (Qt ana thread'inde) cagirir. Platform desteklemiyorsa ya
+    da kayit basarisiz olursa (izin, cakisma vb.) sessizce hicbir sey
+    yapmaz - uygulama bu ozellik olmadan da calismaya devam eder.
+    """
+    signal_holder = HotkeySignal()
+    signal_holder.triggered.connect(callback)
+    try:
+        import keyboard
+
+        keyboard.add_hotkey(HOTKEY_COMBO, signal_holder.triggered.emit)
+    except Exception:
+        return None
+    return signal_holder  # referansi canli tutmak icin cagirana dondurulur
 
 
 # --------------------------------------------------------------------------
@@ -681,6 +799,11 @@ class CatCharacter(QWidget):
         self.remote_server.command_received.connect(self._on_remote_command)
         self.remote_server.start()
 
+        self._hotkey_signal = register_global_hotkey(self._open_bubble)
+
+        self.tray_icon = None
+        self._setup_tray_icon()
+
     # -- gorsel yukleme / olcekleme -------------------------------------
 
     def _load_pixmaps(self):
@@ -877,6 +1000,39 @@ class CatCharacter(QWidget):
             self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
             self._show_remote_info()
 
+    # -- sistem tepsisi -------------------------------------------------------
+
+    def _setup_tray_icon(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self.tray_icon = QSystemTrayIcon(QIcon(self.pixmaps["norm"]), self)
+        self.tray_icon.setToolTip(self.config.get("character_name"))
+
+        tray_menu = QMenu()
+        show_action = QAction("Goster", self)
+        show_action.triggered.connect(self._restore_from_tray)
+        tray_menu.addAction(show_action)
+        tray_menu.addSeparator()
+        exit_action = QAction("Cikis", self)
+        exit_action.triggered.connect(QApplication.instance().quit)
+        tray_menu.addAction(exit_action)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            self._restore_from_tray()
+
+    def _restore_from_tray(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _toggle_autostart(self, checked):
+        set_autostart(checked)
+
     # -- sag tik menusu -----------------------------------------------------
 
     def contextMenuEvent(self, event):
@@ -930,6 +1086,12 @@ class CatCharacter(QWidget):
         remote_action = QAction("Uzaktan Kumanda Bilgisi", self)
         remote_action.triggered.connect(self._show_remote_info)
         menu.addAction(remote_action)
+
+        autostart_action = QAction("Windows ile Baslat", self)
+        autostart_action.setCheckable(True)
+        autostart_action.setChecked(is_autostart_enabled())
+        autostart_action.toggled.connect(self._toggle_autostart)
+        menu.addAction(autostart_action)
 
         menu.addSeparator()
         exit_action = QAction("Cikis", self)

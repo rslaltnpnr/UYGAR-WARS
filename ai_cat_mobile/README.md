@@ -24,7 +24,8 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   gonderip bilgisayarda acilmasini saglar (orn. bir YouTube linki
   gondererek muzik/video baslatabilirsiniz). Bilgisayardaki kedi
   uygulamasinin sag tik menusundeki "Uzaktan Kumanda Bilgisi"nden IP,
-  port ve PIN'i alip bu panelde bir kez girmeniz yeterli.
+  port ve PIN'i alip bu panelde bir kez girmeniz yeterli. YouTube,
+  YouTube Music, Spotify ve Google icin hazir baglanti butonlari da var.
 
 ## 1) Gerekli araclari kurun (Windows)
 
