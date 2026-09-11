@@ -19,6 +19,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
 - Gemini istekleri: 503 (asiri yuklenme) ve 404 (model kaldirildi)
   durumlarinda masaustu suruumundeki gibi otomatik tekrar deneme ve
   yedek modele (`gemini-3.6-flash`) gecis var.
+- **"Bilgisayari Kumanda Et"** paneli (sag ustteki bilgisayar ikonu):
+  ayni Wi-Fi agindaki `ai_desktop_assistant` uygulamasina bir baglanti
+  gonderip bilgisayarda acilmasini saglar (orn. bir YouTube linki
+  gondererek muzik/video baslatabilirsiniz). Bilgisayardaki kedi
+  uygulamasinin sag tik menusundeki "Uzaktan Kumanda Bilgisi"nden IP,
+  port ve PIN'i alip bu panelde bir kez girmeniz yeterli.
 
 ## 1) Gerekli araclari kurun (Windows)
 
@@ -89,8 +95,11 @@ flutter build apk --release --split-per-abi
 - API anahtari ve ayarlar cihazda `shared_preferences` ile duz metin
   olarak saklanir (masaustu suruumundeki `config.json` ile ayni
   guvenlik seviyesi) - sifreli bir kasa degildir.
-- `AndroidManifest.xml`'e INTERNET (Gemini API icin) ve CAMERA
-  (fotograf cekme icin) izinleri zaten eklenmis durumda.
+- `AndroidManifest.xml`'e INTERNET (Gemini API ve uzaktan kumanda icin)
+  ve CAMERA (fotograf cekme icin) izinleri zaten eklenmis durumda.
+  Uzaktan kumanda bilgisayara duz HTTP (TLS'siz) ile baglandigi icin
+  `usesCleartextTraffic="true"` de ayarli - bu yalnizca ayni yerel agda
+  calisir, internetten disariya acik degildir.
 - Bu, sistem geneli "her uygulamanin ustunde gezinen" bir overlay
   DEGILDIR; kedi yalnizca bu uygulama acikken, uygulamanin kendi
   ekraninda gezinir.

@@ -4,10 +4,14 @@
     <!-- Sohbet panelinden fotograf cekebilmek icin (image_picker). -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Bilgisayardaki "Uzaktan Kumanda" ozelligi ayni yerel agdaki
+         duz HTTP (TLS'siz) sunucuya baglanir; bu yuzden cleartext
+         trafik acik olmali. -->
     <application
         android:label="AI Kedi Asistani"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
