@@ -13,6 +13,12 @@ karakteri (PyQt6).
   fazla skin varsa aralarinda gecis, kediye isim ver, sohbet gecmisi,
   Gemini API key ayarlari, uzaktan kumanda bilgisi, Windows ile baslat,
   cikis.
+- **Tema**: sag tik menusundeki "Acik Tema" onay kutusuyla konusma
+  balonu ve sohbet gecmisi panelinin rengi acik/karanlik arasinda
+  degistirilebilir; tercih `config.json`'da saklanir ve "Yedek Al" /
+  "Yedekten Geri Yukle" ile diger tum ayarlar gibi tasinir (mobil
+  uygulamadaki ayarlar menusundeki tema tercihiyle ayni fikirde, ayri
+  saklanan bir tercih - canli bir senkron degil).
 - **Uzaktan kumanda**: `ai_cat_mobile` (Android) uygulamasindan ayni
   Wi-Fi agi uzerinden bir baglanti gonderip bilgisayarda acilmasini
   saglayabilirsiniz (orn. bir YouTube linki -> muzik/video calar).
