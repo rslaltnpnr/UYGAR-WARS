@@ -24,6 +24,8 @@ class SettingsService {
   static const _keyRemoteProfiles = 'remote_profiles';
   static const _keyActiveProfileId = 'active_profile_id';
   static const _keyThemeMode = 'theme_mode';
+  static const _keyAutoBackupEnabled = 'auto_backup_enabled';
+  static const _keyAutoBackupLast = 'auto_backup_last';
 
   final SharedPreferences _prefs;
 
@@ -110,5 +112,20 @@ class SettingsService {
       ThemeMode.dark => 'dark',
     };
     _prefs.setString(_keyThemeMode, value);
+  }
+
+  /// Varsayilan true - masaustu suruumundeki ayni varsayilanla tutarli.
+  bool get autoBackupEnabled => _prefs.getBool(_keyAutoBackupEnabled) ?? true;
+  set autoBackupEnabled(bool value) =>
+      _prefs.setBool(_keyAutoBackupEnabled, value);
+
+  /// En son otomatik yedek alinan zaman (ISO 8601) - hic alinmadiysa null.
+  String? get autoBackupLast => _prefs.getString(_keyAutoBackupLast);
+  set autoBackupLast(String? value) {
+    if (value == null) {
+      _prefs.remove(_keyAutoBackupLast);
+    } else {
+      _prefs.setString(_keyAutoBackupLast, value);
+    }
   }
 }

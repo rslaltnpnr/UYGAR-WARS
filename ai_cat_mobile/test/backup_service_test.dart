@@ -65,4 +65,57 @@ void main() {
       expect(prefs.getStringList('remote_profile_ids'), ['a', 'b', 'c']);
     });
   });
+
+  group('shouldRunAutoBackup', () {
+    test('hic yedek yoksa true doner', () {
+      expect(shouldRunAutoBackup(null, DateTime(2026, 1, 2)), isTrue);
+      expect(shouldRunAutoBackup('', DateTime(2026, 1, 2)), isTrue);
+    });
+
+    test('gecersiz tarih true doner', () {
+      expect(
+        shouldRunAutoBackup('gecersiz-tarih', DateTime(2026, 1, 2)),
+        isTrue,
+      );
+    });
+
+    test('interval dolmamissa false doner', () {
+      final last = DateTime(2026, 1, 1, 10, 0).toIso8601String();
+      final now = DateTime(2026, 1, 1, 20, 0); // 10 saat sonra
+      expect(shouldRunAutoBackup(last, now, intervalDays: 1), isFalse);
+    });
+
+    test('interval dolmussa true doner', () {
+      final last = DateTime(2026, 1, 1, 10, 0).toIso8601String();
+      final now = DateTime(2026, 1, 2, 11, 0); // 25 saat sonra
+      expect(shouldRunAutoBackup(last, now, intervalDays: 1), isTrue);
+    });
+  });
+
+  group('autoBackupFilesToDelete', () {
+    test('kapasitenin altindaysa hicbir sey silinmez', () {
+      final result = autoBackupFilesToDelete([
+        '${autoBackupPrefix}2026-01-01-000000.json',
+      ], keepCount: 5);
+      expect(result, isEmpty);
+    });
+
+    test('fazla dosyalar en eskiden baslayarak listelenir', () {
+      final names = [
+        '${autoBackupPrefix}2026-01-01-000000.json',
+        '${autoBackupPrefix}2026-01-02-000000.json',
+        '${autoBackupPrefix}2026-01-03-000000.json',
+      ];
+      final result = autoBackupFilesToDelete(names, keepCount: 2);
+      expect(result, [names[0]]);
+    });
+
+    test('ilgisiz dosyalar goz ardi edilir', () {
+      final result = autoBackupFilesToDelete([
+        'baska-dosya.txt',
+        '${autoBackupPrefix}2026-01-01-000000.json',
+      ], keepCount: 0);
+      expect(result, ['${autoBackupPrefix}2026-01-01-000000.json']);
+    });
+  });
 }

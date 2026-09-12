@@ -72,7 +72,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   herhangi bir yere kaydedebilirsiniz - **API anahtarinizi ve PIN'lerinizi
   duz metin icerir, guvenli saklayin**). Geri yuklemek icin bu dosyayi bir
   dosya yoneticisinden "Paylas" ile tekrar uygulamaya gonderin; onay
-  sorulduktan sonra mevcut verilerin uzerine yazilir.
+  sorulduktan sonra mevcut verilerin uzerine yazilir. Ayarlardaki
+  "Otomatik Yedekleme (Gunluk)" acikken (varsayilan), uygulama her
+  acildiginda gunde en fazla bir kez ayni icerigi sessizce (paylasim
+  sayfasi acilmadan) cihazin kendi belge klasorune kaydeder ve en fazla
+  son 7 yedegi tutar - masaustu suruumundeki gibi gercek bir arka plan
+  zamanlayicisi degildir, yalnizca uygulama acildiginda kontrol edilir.
 - **Guncelleme kontrolu**: Ayarlar penceresindeki "Guncelleme Kontrol" ile
   GitHub'daki en son surumu sorgular; daha yeni bir surum varsa APK'yi
   (ya da release sayfasini) tarayicida acar - kurulum icin "Bilinmeyen

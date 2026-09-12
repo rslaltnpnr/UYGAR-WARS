@@ -28,7 +28,7 @@ import time
 import traceback
 import webbrowser
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 from PyQt6.QtCore import QObject, QPoint, Qt, QThread, QTimer, pyqtSignal
@@ -195,7 +195,17 @@ DEFAULT_CONFIG = {
     "gemini_request_date": None,
     "gemini_request_count": 0,
     "theme_mode": "dark",
+    "auto_backup_enabled": True,
+    "auto_backup_last": None,
 }
+
+AUTO_BACKUP_PREFIX = "otomatik-yedek-"
+AUTO_BACKUP_INTERVAL_DAYS = 1
+AUTO_BACKUP_MAX_COUNT = 7
+# Zamanlayici her calistiginda "bir gun gecti mi" kontrol edilir - bu
+# yuzden interval_days'ten cok daha sik calisabilir (dakikalarda bir),
+# gercek yedekleme yine de gunde bir kereyle sinirli kalir.
+AUTO_BACKUP_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
 # Konusma balonu ve gecmis paneli gibi yari-seffaf panellerin renk paleti.
 # Mobil uygulamadaki ThemeMode.light/dark tercihiyle ayni fikirde -
@@ -422,6 +432,44 @@ def record_connection(recent_connections, client_ip, endpoint, now_epoch, max_co
     conn["last_seen_epoch"] = now_epoch
     conn["last_seen"] = datetime.fromtimestamp(now_epoch).strftime("%Y-%m-%d %H:%M")
     conn["last_endpoint"] = endpoint
+
+
+def auto_backup_dir():
+    return os.path.join(base_dir(), "backups")
+
+
+def should_run_auto_backup(last_backup_str, now, interval_days=AUTO_BACKUP_INTERVAL_DAYS):
+    """[last_backup_str] config'te saklanan en son otomatik yedek zamaninin
+    ISO 8601 dizesi - bos/gecersizse (hic yedek alinmamis ya da bozuk
+    kayit) hemen True doner. [now] bir datetime. Son yedekten bu yana
+    [interval_days] gun ya da daha fazla gecmisse True doner."""
+    if not last_backup_str:
+        return True
+    try:
+        last = datetime.fromisoformat(last_backup_str)
+    except (ValueError, TypeError):
+        return True
+    return (now - last) >= timedelta(days=interval_days)
+
+
+def prune_old_backups(directory, keep_count):
+    """[directory] icinde AUTO_BACKUP_PREFIX ile baslayan dosyalari isme
+    gore (bu da zaman damgasi anlamina gelir) sıralayip en yeni
+    [keep_count] tanesini tutar, gerisini siler. [directory] yoksa
+    sessizce hicbir sey yapmaz."""
+    if not os.path.isdir(directory):
+        return
+    files = sorted(
+        f
+        for f in os.listdir(directory)
+        if f.startswith(AUTO_BACKUP_PREFIX) and f.endswith(".json")
+    )
+    stale = files[:-keep_count] if keep_count > 0 else files
+    for old_file in stale:
+        try:
+            os.remove(os.path.join(directory, old_file))
+        except OSError:
+            pass
 
 
 def format_history_entries(entries):
@@ -1677,6 +1725,11 @@ class CatCharacter(QWidget):
         self.sleep_check_timer.timeout.connect(self._check_sleep)
         self.sleep_check_timer.start(5000)
 
+        self.auto_backup_timer = QTimer(self)
+        self.auto_backup_timer.timeout.connect(self._maybe_auto_backup)
+        self.auto_backup_timer.start(AUTO_BACKUP_CHECK_INTERVAL_MS)
+        self._maybe_auto_backup()
+
         self.revert_timer = QTimer(self)
         self.revert_timer.setSingleShot(True)
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
@@ -1988,6 +2041,36 @@ class CatCharacter(QWidget):
             QMessageBox.information(self, "Hatirlatma", text)
 
     # -- yedekleme / geri yukleme -------------------------------------------
+
+    def _maybe_auto_backup(self):
+        """auto_backup_timer'in her tetiklenisinde (ayrica uygulama acilista
+        da bir kez) cagrilir; sessizce hicbir sey yapmayabilir - gercek
+        yedekleme sadece ayar acikken ve son yedekten bu yana yeterli
+        zaman gectiyse gerceklesir (bkz. should_run_auto_backup)."""
+        if not self.config.get("auto_backup_enabled"):
+            return
+        now = datetime.now()
+        if not should_run_auto_backup(self.config.get("auto_backup_last"), now):
+            return
+        self._run_auto_backup(now)
+
+    def _run_auto_backup(self, now):
+        directory = auto_backup_dir()
+        backup = {"config": self.config.data, "history": self.history.entries}
+        filename = f"{AUTO_BACKUP_PREFIX}{now.strftime('%Y-%m-%d-%H%M%S')}.json"
+        try:
+            os.makedirs(directory, exist_ok=True)
+            with open(os.path.join(directory, filename), "w", encoding="utf-8") as f:
+                json.dump(backup, f, ensure_ascii=False, indent=2)
+            prune_old_backups(directory, AUTO_BACKUP_MAX_COUNT)
+        except OSError:
+            return
+        self.config.set("auto_backup_last", now.isoformat())
+
+    def _toggle_auto_backup(self, checked):
+        self.config.set("auto_backup_enabled", checked)
+        if checked:
+            self._maybe_auto_backup()
 
     def _export_backup(self):
         self._register_activity()
@@ -2302,6 +2385,12 @@ class CatCharacter(QWidget):
         restore_action = QAction("Yedekten Geri Yukle...", self)
         restore_action.triggered.connect(self._import_backup)
         menu.addAction(restore_action)
+
+        auto_backup_action = QAction("Otomatik Yedekleme (Gunluk)", self)
+        auto_backup_action.setCheckable(True)
+        auto_backup_action.setChecked(self.config.get("auto_backup_enabled"))
+        auto_backup_action.toggled.connect(self._toggle_auto_backup)
+        menu.addAction(auto_backup_action)
 
         menu.addSeparator()
 
