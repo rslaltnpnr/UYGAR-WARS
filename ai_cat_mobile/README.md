@@ -18,9 +18,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   linkini gorebilirsiniz.
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
-  goruntulenip temizlenebiliyor. Sohbet panelindeki bulut simgesiyle
-  eslesik bilgisayarin kendi sohbet gecmisini **ice aktarabilirsiniz**
-  (zaten var olan kayitlar tekrar eklenmez).
+  goruntulenip temizlenebiliyor. Sohbet panelindeki senkron simgesiyle
+  eslesik bilgisayarla gecmisi **iki yonlu senkronize edebilirsiniz**:
+  once telefondaki kayitlar bilgisayara gonderilir, sonra bilgisayarin
+  -artik telefonunkilerle birlesmis- tum gecmisi geri cekilir; her iki
+  taraf da senkron sonunda tum kayitlarin birlesimine sahip olur (zaten
+  var olan kayitlar tekrar eklenmez).
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
   cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.

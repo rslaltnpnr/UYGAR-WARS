@@ -63,6 +63,15 @@ class AlertsFetchResult {
   const AlertsFetchResult(this.fingerprint, this.alerts);
 }
 
+/// [pushHistory] sonucu: parmak izinin yani sira bilgisayarda gercekten
+/// yeni eklenen (zaten var olmayan) kayit sayisini tasir.
+class HistoryPushResult {
+  final String fingerprint;
+  final int added;
+
+  const HistoryPushResult(this.fingerprint, this.added);
+}
+
 class _RawResponse {
   final int statusCode;
   final String body;
@@ -299,6 +308,39 @@ class RemoteControlService {
       return HistoryFetchResult(response.fingerprint, entries);
     } catch (_) {
       throw RemoteControlException('Geçmiş okunamadı.');
+    }
+  }
+
+  /// Telefondaki sohbet gecmisi kayitlarini bilgisayara gonderir; bilgisayar
+  /// zaten sahip oldugu (ayni zaman/soru/cevap ucluesune sahip) kayitlari
+  /// kendisi atlar (bkz. main.py - merge_history_entries), bu yuzden burada
+  /// tum [entries] listesi gonderilebilir.
+  Future<HistoryPushResult> pushHistory({
+    required String ip,
+    required int port,
+    required String pin,
+    required List<Map<String, dynamic>> entries,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/history/import',
+      body: {'pin': pin, 'entries': entries},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      final added = (data['added'] as num?)?.toInt() ?? 0;
+      return HistoryPushResult(response.fingerprint, added);
+    } catch (_) {
+      throw RemoteControlException('Sunucu yaniti okunamadı.');
     }
   }
 

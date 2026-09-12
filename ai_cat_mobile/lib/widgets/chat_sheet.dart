@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/chat_entry.dart';
 import '../services/history_service.dart';
+import '../services/history_sync.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -114,7 +115,12 @@ class _ChatSheetState extends State<ChatSheet> {
     setState(() => _entries = []);
   }
 
-  Future<void> _importFromDesktop() async {
+  /// Iki yonlu senkronizasyon: once telefondaki tum kayitlari bilgisayara
+  /// gonderir (bilgisayar zaten sahip oldugu kayitlari kendisi atlar),
+  /// sonra bilgisayarin - artik telefonunkilerle birlesmis - tum gecmisini
+  /// geri ceker ve telefonda eksik olanlari ekler. Sonunda iki taraf da
+  /// birlesimin (union) tamamina sahip olur.
+  Future<void> _syncWithDesktop() async {
     if (_importing) return;
     final profiles = widget.settings.remoteProfiles;
     if (profiles.isEmpty) {
@@ -128,28 +134,48 @@ class _ChatSheetState extends State<ChatSheet> {
       return;
     }
     final activeId = widget.settings.activeProfileId;
-    final profile = profiles.firstWhere(
+    var profile = profiles.firstWhere(
       (p) => p.id == activeId,
       orElse: () => profiles.first,
     );
 
+    void updateFingerprint(String fingerprint) {
+      profile = profile.copyWith(certFingerprint: fingerprint);
+      widget.settings.remoteProfiles = widget.settings.remoteProfiles
+          .map((p) => p.id == profile.id ? profile : p)
+          .toList();
+    }
+
     setState(() => _importing = true);
     try {
-      final result = await _remoteService.fetchHistory(
+      final pushEntries = _entries
+          .map(
+            (e) => {
+              'time': formatDesktopTime(e.time),
+              'question': e.question,
+              'answer': e.answer,
+              'is_error': e.isError,
+            },
+          )
+          .toList();
+      final pushResult = await _remoteService.pushHistory(
+        ip: profile.ip,
+        port: profile.port,
+        pin: profile.pin,
+        entries: pushEntries,
+        pinnedFingerprint: profile.certFingerprint,
+      );
+      updateFingerprint(pushResult.fingerprint);
+
+      final pullResult = await _remoteService.fetchHistory(
         ip: profile.ip,
         port: profile.port,
         pin: profile.pin,
         pinnedFingerprint: profile.certFingerprint,
       );
-      widget.settings.remoteProfiles = profiles
-          .map(
-            (p) => p.id == profile.id
-                ? p.copyWith(certFingerprint: result.fingerprint)
-                : p,
-          )
-          .toList();
+      updateFingerprint(pullResult.fingerprint);
 
-      final imported = result.entries
+      final pulled = pullResult.entries
           .map(
             (e) => ChatEntry(
               time: DateTime.tryParse(e['time'] as String? ?? '') ??
@@ -161,11 +187,14 @@ class _ChatSheetState extends State<ChatSheet> {
           )
           .toList();
 
-      String keyOf(ChatEntry e) =>
-          '${e.time.toIso8601String()}|${e.question}|${e.answer}';
+      String keyOf(ChatEntry e) => historySyncKey(
+        time: e.time,
+        question: e.question,
+        answer: e.answer,
+      );
       final existingKeys = _entries.map(keyOf).toSet();
       var addedCount = 0;
-      for (final entry in imported) {
+      for (final entry in pulled) {
         final key = keyOf(entry);
         if (existingKeys.contains(key)) continue;
         existingKeys.add(key);
@@ -179,7 +208,12 @@ class _ChatSheetState extends State<ChatSheet> {
         _importing = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$addedCount yeni kayıt içe aktarıldı.')),
+        SnackBar(
+          content: Text(
+            '${pushResult.added} kayıt bilgisayara gönderildi, '
+            '$addedCount yeni kayıt telefona alındı.',
+          ),
+        ),
       );
     } catch (exc) {
       if (!mounted) return;
@@ -235,11 +269,11 @@ class _ChatSheetState extends State<ChatSheet> {
                             ),
                           )
                         : Icon(
-                            Icons.cloud_download_outlined,
+                            Icons.sync,
                             color: colors.textSecondary,
                           ),
-                    tooltip: 'Bilgisayardan Geçmişi Al',
-                    onPressed: _importing ? null : _importFromDesktop,
+                    tooltip: 'Sohbet Geçmişini Senkronize Et',
+                    onPressed: _importing ? null : _syncWithDesktop,
                   ),
                   IconButton(
                     icon: Icon(
