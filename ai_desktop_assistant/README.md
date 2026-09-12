@@ -118,6 +118,19 @@ karakteri (PyQt6).
 - **Hatirlatici**: sag tik menusundeki "Hatirlatici Kur" ile "X dakika
   sonra" seklinde tekil bir hatirlatici kurabilirsiniz; sure dolunca
   sistem tepsisinden bildirim gosterilir (tepsi yoksa bir pencere acilir).
+- **Kural motoru / otomasyon**: sag tik menusundeki "Otomasyon Kurallari..."
+  ile tekrar eden kurallar tanimlayabilirsiniz - hatirlaticidan farkli
+  olarak bunlar kalicidir ve iki tetikleyici turunden birine baglidir:
+  **her gun belirli bir saatte** (orn. "18:00") ya da **N dakika
+  hareketsiz kalinca**; tetiklendiklerinde dort eylemden birini
+  calistirirlar: **bilgisayari kilitle**, **uyku moduna al**, **bildirim
+  goster** (ozel bir mesajla) ya da **bir baglanti ac** (orn. is
+  saatinin bitiminde otomatik olarak bir hatirlatici sayfasi acmak icin -
+  ayni SSRF korumasi burada da gecerlidir, bkz. yukarida). Gunluk
+  kurallar gun basina bir kez, hareketsizlik kurallari ise esik her
+  asildiginda (surekli hareketsizlikte tekrar tekrar degil) ateslenir.
+  Kurallar her 30 saniyede bir kontrol edilir, uygulama kapatilip
+  acilsa da (config.json'da saklandigi icin) kalici kalir.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar

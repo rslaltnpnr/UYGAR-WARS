@@ -217,6 +217,26 @@ AUTO_BACKUP_MAX_COUNT = 7
 # gercek yedekleme yine de gunde bir kereyle sinirli kalir.
 AUTO_BACKUP_CHECK_INTERVAL_MS = 60 * 60 * 1000
 
+# --------------------------------------------------------------------------
+# Kural motoru / otomasyon: "config.json"'daki "automation_rules" listesi
+# (bilerek DEFAULT_CONFIG'e eklenmedi - orada bir liste, dict(DEFAULT_CONFIG)
+# ile alinan sig kopyalar arasinda paylasilan degisebilir bir varsayilan
+# olurdu; bkz. CatCharacter._automation_rules()) kullanicinin tanimladigi
+# tetikleyici -> eylem kurallarini tutar. Her kural bir dict:
+#   {"id", "name", "trigger_type", "trigger_value", "action_type",
+#    "action_value", "enabled", "last_fired"}
+AUTOMATION_TICK_INTERVAL_MS = 30 * 1000
+AUTOMATION_TRIGGER_LABELS = {
+    "time_daily": "Her gun belirli bir saatte",
+    "idle_minutes": "N dakika hareketsiz kalinca",
+}
+AUTOMATION_ACTION_LABELS = {
+    "lock": "Bilgisayari kilitle",
+    "sleep": "Uyku moduna al",
+    "notify": "Bildirim goster",
+    "open_url": "Bir baglanti ac",
+}
+
 # Konusma balonu ve gecmis paneli gibi yari-seffaf panellerin renk paleti.
 # Mobil uygulamadaki ThemeMode.light/dark tercihiyle ayni fikirde -
 # "theme_mode" config anahtari yedek alma/geri yukleme ile diger tum
@@ -533,6 +553,95 @@ def should_run_auto_backup(last_backup_str, now, interval_days=AUTO_BACKUP_INTER
     except (ValueError, TypeError):
         return True
     return (now - last) >= timedelta(days=interval_days)
+
+
+def parse_hh_mm(text):
+    """[text]'i "SS:DD" saat bicimine ayristirir (orn. "9:5" de kabul
+    edilir, "09:05"e normallestirilir). Gecersizse (iki parca degilse,
+    sayi degilse ya da araliğin disindaysa) None doner."""
+    parts = str(text).strip().split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+    except ValueError:
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def should_fire_rule(rule, now, idle_seconds):
+    """[rule] bir otomasyon kuralidir (bkz. AUTOMATION_TRIGGER_LABELS/
+    AUTOMATION_ACTION_LABELS anahtarlari). [now] bir datetime,
+    [idle_seconds] kullanicinin ne kadar suredir hareketsiz oldugu
+    (saniye). Kural devre disiyse (enabled False) her zaman False doner.
+
+    "time_daily": saat [trigger_value]'ya ("SS:DD") ulasildiginda VE bugun
+    henuz ateslenmediyse True doner - boylece dakikada bir kontrol edilse
+    de gunde sadece bir kez ateslenir.
+
+    "idle_minutes": [idle_seconds], [trigger_value] dakikayi astiginda VE
+    en son ateslemeden bu yana en az o kadar zaman gectiyse True doner -
+    boylece surekli hareketsizlikte her kontrolde yeniden ateslenmez."""
+    if not rule.get("enabled", True):
+        return False
+    trigger_type = rule.get("trigger_type")
+    last_fired = rule.get("last_fired")
+    last_fired_dt = None
+    if last_fired:
+        try:
+            last_fired_dt = datetime.fromisoformat(last_fired)
+        except (ValueError, TypeError):
+            last_fired_dt = None
+
+    if trigger_type == "time_daily":
+        if now.strftime("%H:%M") != str(rule.get("trigger_value", "")):
+            return False
+        return last_fired_dt is None or last_fired_dt.date() != now.date()
+
+    if trigger_type == "idle_minutes":
+        try:
+            threshold_minutes = float(rule.get("trigger_value", 0))
+        except (TypeError, ValueError):
+            return False
+        if threshold_minutes <= 0 or idle_seconds < threshold_minutes * 60:
+            return False
+        return last_fired_dt is None or (now - last_fired_dt) >= timedelta(
+            minutes=threshold_minutes
+        )
+
+    return False
+
+
+def describe_automation_rule(rule):
+    """[rule]'u tek satirlik okunabilir bir ozete cevirir - orn.
+    '"Ise gec kalma" - Her gun belirli bir saatte (18:00) -> Bildirim
+    goster [devre disi]'."""
+    trigger_type = rule.get("trigger_type")
+    trigger_label = AUTOMATION_TRIGGER_LABELS.get(trigger_type, trigger_type or "?")
+    trigger_value = rule.get("trigger_value", "")
+    if trigger_type == "idle_minutes":
+        trigger_desc = f"{trigger_label} ({trigger_value} dk)"
+    else:
+        trigger_desc = f"{trigger_label} ({trigger_value})"
+    action_label = AUTOMATION_ACTION_LABELS.get(
+        rule.get("action_type"), rule.get("action_type") or "?"
+    )
+    action_value = rule.get("action_value")
+    action_desc = f"{action_label}: {action_value}" if action_value else action_label
+    suffix = "" if rule.get("enabled", True) else " [devre disi]"
+    return f'"{rule.get("name", "")}" - {trigger_desc} -> {action_desc}{suffix}'
+
+
+def format_automation_rules(rules):
+    """[rules] listesini, her satiri numaralanmis okunabilir duz metne
+    cevirir - Otomasyon Kurallari penceresinde gosterilir."""
+    lines = []
+    for i, rule in enumerate(rules, start=1):
+        lines.append(f"{i}. {describe_automation_rule(rule)}")
+    return "\n".join(lines)
 
 
 def prune_old_backups(directory, keep_count):
@@ -1902,6 +2011,10 @@ class CatCharacter(QWidget):
         self.auto_backup_timer.start(AUTO_BACKUP_CHECK_INTERVAL_MS)
         self._maybe_auto_backup()
 
+        self.automation_timer = QTimer(self)
+        self.automation_timer.timeout.connect(self._run_automation_tick)
+        self.automation_timer.start(AUTOMATION_TICK_INTERVAL_MS)
+
         self.revert_timer = QTimer(self)
         self.revert_timer.setSingleShot(True)
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
@@ -2258,6 +2371,177 @@ class CatCharacter(QWidget):
             QMessageBox.information(self, "Hatirlatma", text)
         self.notifications.add(reminder_title, text)
 
+    # -- kural motoru / otomasyon --------------------------------------------
+
+    def _automation_rules(self):
+        """config'teki "automation_rules" listesinin bir kopyasini dondurur
+        (DEFAULT_CONFIG'te bilerek yok - bkz. o tanimin yanindaki yorum);
+        cagiran bunu diledigi gibi degistirip config.set() ile geri
+        yazabilir, dogrudan config.data'yi mutasyona ugratmadan."""
+        return list(self.config.get("automation_rules") or [])
+
+    def _run_automation_tick(self):
+        """automation_timer'in her tetiklenisinde (bkz. AUTOMATION_TICK_
+        INTERVAL_MS) cagrilir; ateslenmesi gereken kural varsa eylemini
+        calistirir ve last_fired'ini gunceller (bkz. should_fire_rule)."""
+        now = datetime.now()
+        idle_seconds = time.monotonic() - self.last_activity
+        rules = self._automation_rules()
+        changed = False
+        for rule in rules:
+            if should_fire_rule(rule, now, idle_seconds):
+                self._perform_automation_action(rule)
+                rule["last_fired"] = now.isoformat()
+                changed = True
+        if changed:
+            self.config.set("automation_rules", rules)
+
+    def _perform_automation_action(self, rule):
+        action_type = rule.get("action_type")
+        rule_name = rule.get("name", "")
+        if action_type == "lock":
+            handle_power_action("lock")
+        elif action_type == "sleep":
+            handle_power_action("sleep")
+        elif action_type == "notify":
+            title = f"Otomasyon: {rule_name}" if rule_name else "Otomasyon"
+            message = str(rule.get("action_value") or "Kural calisti.")
+            if self.tray_icon is not None:
+                self.tray_icon.showMessage(
+                    title, message, QSystemTrayIcon.MessageIcon.Information, 8000
+                )
+            else:
+                QMessageBox.information(self, title, message)
+            self.notifications.add(title, message)
+        elif action_type == "open_url":
+            url = str(rule.get("action_value") or "")
+            if is_url_safe_to_open(url):
+                webbrowser.open(url)
+
+    def _show_automation_rules(self):
+        self._register_activity()
+        rules = self._automation_rules()
+        text = format_automation_rules(rules) if rules else "Henuz bir otomasyon kurali yok."
+        box = QMessageBox(self)
+        box.setWindowTitle("Otomasyon Kurallari")
+        box.setText(text)
+        add_button = box.addButton("Yeni Kural Ekle...", QMessageBox.ButtonRole.ActionRole)
+        delete_button = (
+            box.addButton("Kural Sil...", QMessageBox.ButtonRole.ActionRole)
+            if rules
+            else None
+        )
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        clicked = box.clickedButton()
+        if clicked == add_button:
+            self._create_automation_rule()
+        elif delete_button is not None and clicked == delete_button:
+            self._delete_automation_rule()
+
+    def _create_automation_rule(self):
+        self._register_activity()
+        name, ok = QInputDialog.getText(self, "Yeni Otomasyon Kurali", "Kural adi:")
+        if not ok or not name.strip():
+            return
+
+        trigger_keys = list(AUTOMATION_TRIGGER_LABELS.keys())
+        trigger_labels = list(AUTOMATION_TRIGGER_LABELS.values())
+        trigger_label, ok = QInputDialog.getItem(
+            self, "Yeni Otomasyon Kurali", "Ne zaman calissin?", trigger_labels, 0, False
+        )
+        if not ok:
+            return
+        trigger_type = trigger_keys[trigger_labels.index(trigger_label)]
+
+        if trigger_type == "time_daily":
+            time_text, ok = QInputDialog.getText(
+                self, "Yeni Otomasyon Kurali", "Saat (SS:DD, orn. 18:30):", text="18:00"
+            )
+            if not ok:
+                return
+            trigger_value = parse_hh_mm(time_text)
+            if trigger_value is None:
+                QMessageBox.warning(
+                    self, "Gecersiz Saat", "Saat SS:DD bicimimde olmali (orn. 09:30)."
+                )
+                return
+        else:
+            minutes, ok = QInputDialog.getInt(
+                self,
+                "Yeni Otomasyon Kurali",
+                "Kac dakika hareketsizlikten sonra?",
+                30,
+                1,
+                1440,
+            )
+            if not ok:
+                return
+            trigger_value = minutes
+
+        action_keys = list(AUTOMATION_ACTION_LABELS.keys())
+        action_labels = list(AUTOMATION_ACTION_LABELS.values())
+        action_label, ok = QInputDialog.getItem(
+            self, "Yeni Otomasyon Kurali", "Ne yapsin?", action_labels, 0, False
+        )
+        if not ok:
+            return
+        action_type = action_keys[action_labels.index(action_label)]
+
+        action_value = ""
+        if action_type == "notify":
+            action_value, ok = QInputDialog.getText(
+                self, "Yeni Otomasyon Kurali", "Bildirim mesaji:", text=name.strip()
+            )
+            if not ok:
+                return
+            action_value = action_value.strip()
+        elif action_type == "open_url":
+            action_value, ok = QInputDialog.getText(
+                self, "Yeni Otomasyon Kurali", "Acilacak baglanti (https://...):"
+            )
+            if not ok or not action_value.strip():
+                return
+            action_value = action_value.strip()
+            if not is_url_safe_to_open(action_value):
+                QMessageBox.warning(
+                    self,
+                    "Gecersiz Baglanti",
+                    "Bu baglanti acilamaz (yalnizca genel http(s) adreslerine izin verilir).",
+                )
+                return
+
+        rule = {
+            "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
+            "name": name.strip(),
+            "trigger_type": trigger_type,
+            "trigger_value": trigger_value,
+            "action_type": action_type,
+            "action_value": action_value,
+            "enabled": True,
+            "last_fired": None,
+        }
+        rules = self._automation_rules()
+        rules.append(rule)
+        self.config.set("automation_rules", rules)
+        QMessageBox.information(
+            self, "Kural Eklendi", f'"{rule["name"]}" kurali eklendi.'
+        )
+
+    def _delete_automation_rule(self):
+        self._register_activity()
+        rules = self._automation_rules()
+        if not rules:
+            return
+        descriptions = [describe_automation_rule(r) for r in rules]
+        choice, ok = QInputDialog.getItem(
+            self, "Kural Sil", "Silinecek kural:", descriptions, 0, False
+        )
+        if not ok:
+            return
+        del rules[descriptions.index(choice)]
+        self.config.set("automation_rules", rules)
+
     # -- yedekleme / geri yukleme -------------------------------------------
 
     def _maybe_auto_backup(self):
@@ -2590,6 +2874,10 @@ class CatCharacter(QWidget):
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)
         menu.addAction(reminder_action)
+
+        automation_action = QAction("Otomasyon Kurallari...", self)
+        automation_action.triggered.connect(self._show_automation_rules)
+        menu.addAction(automation_action)
 
         autostart_action = QAction("Windows ile Baslat", self)
         autostart_action.setCheckable(True)
