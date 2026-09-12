@@ -90,6 +90,10 @@ MAX_HISTORY_ENTRIES = 200
 ACCESS_LOG_MAX_BYTES = 512 * 1024
 MAX_NOTIFICATION_ENTRIES = 50
 ACCESS_LOG_DISPLAY_LINES = 50
+# "Baglam farkindaliği": her soruda modele gonderilen onceki soru-cevap
+# sayisi - fazla yuksek olursa istek boyutu (ve maliyeti) gereksiz buyur,
+# fazla dusuk olursa "ona gore" gibi takip sorulari baglamini kaybeder.
+CONTEXT_HISTORY_TURNS = 5
 
 
 # --------------------------------------------------------------------------
@@ -202,6 +206,7 @@ DEFAULT_CONFIG = {
     "theme_mode": "dark",
     "auto_backup_enabled": True,
     "auto_backup_last": None,
+    "context_aware_enabled": True,
 }
 
 AUTO_BACKUP_PREFIX = "otomatik-yedek-"
@@ -480,6 +485,19 @@ def merge_history_entries(existing_entries, new_entries):
         )
         added += 1
     return added
+
+
+def select_context_turns(entries, enabled, max_turns=CONTEXT_HISTORY_TURNS):
+    """"Baglam farkindaligi" icin GeminiWorker'a gonderilecek onceki
+    soru-cevaplari secer: [enabled] False ise (kullanici kapatmis) hic
+    baglam gonderilmez; aksi halde hatali olmayan (is_error=False) son
+    [max_turns] kayit, {"question", "answer"} sozlukleri olarak, en
+    eskiden en yeniye siralanmis dondurulur."""
+    if not enabled:
+        return []
+    successful = [e for e in entries if not e.get("is_error")]
+    recent = successful[-max_turns:] if max_turns > 0 else []
+    return [{"question": e["question"], "answer": e["answer"]} for e in recent]
 
 
 def record_connection(recent_connections, client_ip, endpoint, now_epoch, max_connections):
@@ -1441,12 +1459,24 @@ class GeminiWorker(QThread):
     finished_ok = pyqtSignal(str)
     finished_error = pyqtSignal(str)
 
-    def __init__(self, api_key, model_name, question, character_name, parent=None):
+    def __init__(
+        self,
+        api_key,
+        model_name,
+        question,
+        character_name,
+        history_context=None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.api_key = api_key
         self.model_name = model_name
         self.question = question
         self.character_name = character_name
+        # Onceki soru-cevaplar (bkz. CONTEXT_HISTORY_TURNS) - "ona gore",
+        # "bir de sunu" gibi takip sorularinin baglamini korumak icin
+        # modele ayri konusma turleri olarak gonderilir.
+        self.history_context = history_context or []
 
     def run(self):
         try:
@@ -1478,10 +1508,33 @@ class GeminiWorker(QThread):
             "bir dil modeli oldugunu veya hangi sirkete/modele ait oldugunu "
             "asla soyleme. Kisa, samimi ve yardimsever konus."
         )
-        contents = [
-            self.question,
-            types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
-        ]
+        # Onceki turler sadece metin olarak (ekran goruntusu her seferinde
+        # yeniden gonderilir, o an gecerli olan tek goruntu budur) - boylece
+        # model "bahsettigim..." gibi bir onceki soruya gonderme yapan
+        # takip sorularinda neyin kastedildigini hatirlayabilir.
+        contents = []
+        for turn in self.history_context:
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=turn["question"])],
+                )
+            )
+            contents.append(
+                types.Content(
+                    role="model",
+                    parts=[types.Part.from_text(text=turn["answer"])],
+                )
+            )
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(text=self.question),
+                    types.Part.from_bytes(data=png_bytes, mime_type="image/png"),
+                ],
+            )
+        )
         gen_config = types.GenerateContentConfig(system_instruction=persona)
 
         try:
@@ -2018,10 +2071,16 @@ class CatCharacter(QWidget):
             self.config.get("model_name"),
             question,
             self.config.get("character_name"),
+            history_context=self._recent_context(),
         )
         self.worker.finished_ok.connect(self._on_answer)
         self.worker.finished_error.connect(self._on_answer_error)
         self.worker.start()
+
+    def _recent_context(self):
+        return select_context_turns(
+            self.history.entries, self.config.get("context_aware_enabled")
+        )
 
     def _on_answer(self, text):
         self._set_state("smile")
@@ -2230,6 +2289,9 @@ class CatCharacter(QWidget):
         self.config.set("auto_backup_enabled", checked)
         if checked:
             self._maybe_auto_backup()
+
+    def _toggle_context_aware(self, checked):
+        self.config.set("context_aware_enabled", checked)
 
     def _export_backup(self):
         self._register_activity()
@@ -2560,6 +2622,12 @@ class CatCharacter(QWidget):
         auto_backup_action.setChecked(self.config.get("auto_backup_enabled"))
         auto_backup_action.toggled.connect(self._toggle_auto_backup)
         menu.addAction(auto_backup_action)
+
+        context_aware_action = QAction("Onceki Sohbeti Hatirla (Baglam)", self)
+        context_aware_action.setCheckable(True)
+        context_aware_action.setChecked(self.config.get("context_aware_enabled"))
+        context_aware_action.toggled.connect(self._toggle_context_aware)
+        menu.addAction(context_aware_action)
 
         menu.addSeparator()
 

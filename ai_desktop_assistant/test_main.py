@@ -24,6 +24,7 @@ from main import (
     merge_history_entries,
     prune_old_backups,
     record_connection,
+    select_context_turns,
     should_run_auto_backup,
     tail_access_log,
 )
@@ -231,6 +232,46 @@ class TestMergeHistoryEntries:
         new = [{"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"}]
         merge_history_entries(existing, new)
         assert existing[0]["is_error"] is False
+
+
+class TestSelectContextTurns:
+    def test_kapaliysa_bos_liste_doner(self):
+        entries = [{"question": "q1", "answer": "a1", "is_error": False}]
+        assert select_context_turns(entries, enabled=False) == []
+
+    def test_acikken_soru_cevaplar_donusturulur(self):
+        entries = [
+            {"question": "q1", "answer": "a1", "is_error": False},
+            {"question": "q2", "answer": "a2", "is_error": False},
+        ]
+        result = select_context_turns(entries, enabled=True)
+        assert result == [
+            {"question": "q1", "answer": "a1"},
+            {"question": "q2", "answer": "a2"},
+        ]
+
+    def test_hatali_kayitlar_haric_tutulur(self):
+        entries = [
+            {"question": "q1", "answer": "a1", "is_error": False},
+            {"question": "q2", "answer": "hata mesaji", "is_error": True},
+            {"question": "q3", "answer": "a3", "is_error": False},
+        ]
+        result = select_context_turns(entries, enabled=True)
+        assert result == [
+            {"question": "q1", "answer": "a1"},
+            {"question": "q3", "answer": "a3"},
+        ]
+
+    def test_sadece_son_max_turns_kadar_alinir(self):
+        entries = [
+            {"question": f"q{i}", "answer": f"a{i}", "is_error": False}
+            for i in range(10)
+        ]
+        result = select_context_turns(entries, enabled=True, max_turns=3)
+        assert [t["question"] for t in result] == ["q7", "q8", "q9"]
+
+    def test_gecmis_bossa_bos_liste_doner(self):
+        assert select_context_turns([], enabled=True) == []
 
 
 class TestFormatHistoryEntries:
