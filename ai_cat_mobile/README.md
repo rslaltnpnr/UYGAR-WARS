@@ -58,6 +58,18 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   alanina bu bilgisayarin normal yerel IP'si yerine Tailscale
   IP'sini (100.x.x.x) girin - PIN ve sertifika dogrulamasi aynen
   calismaya devam eder, router ayari gerekmez.
+  **Cevrimdisi mod**: "Bilgisayarda Ac" ile gonderilen bir baglanti,
+  bilgisayara o an ulasilamiyorsa (ag yok, bilgisayar kapali vb.)
+  sessizce basarisiz olmak yerine cihazda kuyruga alinir - panelde
+  "Kuyrukta N bağlantı bekliyor" olarak gorunur ve "Şimdi Dene" ile
+  elle denenebilir. Uygulama her basarili baglanti kontrolunde
+  (yaklasik 45 saniyede bir, arka planda calisan uyari yoklamasi
+  sirasinda) kuyruktakileri otomatik olarak sirayla gondermeyi dener
+  ve basarili olunca yerel bir bildirimle haber verir. Yalnizca
+  baglanti acma komutlari kuyruklanir - medya/guc komutlari "simdi"
+  anlamina geldigi icin (dakikalar sonra gec gelen bir "kilitle"
+  komutu sasirtici olurdu) kuyruklanmaz, baglanti yoksa dogrudan
+  hata gosterilir.
   Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
   sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
   parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere
