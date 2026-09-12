@@ -246,4 +246,111 @@ void main() {
       },
     );
   });
+
+  group('Makrolar', () {
+    testWidgets(
+      'makro oluşturulabilir, listede görünür, çalıştırılabilir ve '
+      'silinebilir',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final settings = SettingsService(prefs);
+        // ip/pin kasitli olarak bos - makro calistirildiginda gercek bir ag
+        // istegi denemeden hemen basarisiz olur, test hizli kalir.
+        settings.remoteProfiles = const [
+          RemoteProfile(
+            id: '1',
+            name: 'Ev',
+            ip: '',
+            port: 8765,
+            pin: '',
+            certFingerprint: '',
+          ),
+        ];
+        settings.activeProfileId = '1';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: const [AppColors.dark]),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => RemoteControlSheet(settings: settings),
+                  ),
+                  child: const Text('Aç'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Aç'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(
+          find.text(
+            'Birden fazla komutu tek dokunuşla çalıştırmak için bir '
+            'makro oluşturun (örn. bir bağlantı açıp sesi kısan).',
+          ),
+          findsOneWidget,
+        );
+
+        // Yeni makro dialogunu ac.
+        final addMacroButton = find.byTooltip('Yeni makro');
+        await tester.ensureVisible(addMacroButton);
+        await tester.pump();
+        await tester.tap(addMacroButton);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('Yeni Makro'), findsOneWidget);
+
+        // Isim gir ve bir adim ekle (sesi kis).
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Makro adı (örn. Çalışma Modu)'),
+          'Sessiz Mod',
+        );
+        await tester.tap(find.text('Sessize Al'));
+        await tester.pump();
+
+        expect(find.text('1. Sessize Al'), findsOneWidget);
+
+        await tester.tap(find.text('Kaydet'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // Makro listede gorunmeli.
+        expect(find.text('Sessiz Mod (1)'), findsOneWidget);
+
+        // Calistir - ip/pin bos oldugu icin adim basarisiz olur ama gercek
+        // bir ag istegi denemez.
+        final runButton = find.text('Sessiz Mod (1)');
+        await tester.ensureVisible(runButton);
+        await tester.pump();
+        await tester.tap(runButton);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('"Sessiz Mod" makrosu: 1 başarısız.'), findsOneWidget);
+
+        // Sil.
+        final deleteButton = find.byTooltip('Makroyu sil');
+        await tester.ensureVisible(deleteButton);
+        await tester.pump();
+        await tester.tap(deleteButton);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('Sil'), findsOneWidget);
+        await tester.tap(find.text('Sil'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('Sessiz Mod (1)'), findsNothing);
+      },
+    );
+  });
 }

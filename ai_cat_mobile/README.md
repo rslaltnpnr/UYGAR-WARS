@@ -79,6 +79,16 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   denenir - tek bir bilgisayarin kapali/ag disinda olmasi digerlerini
   etkilemez. Islem sonunda "3 bilgisayardan: 2 gönderildi, 1 kuyruğa
   eklendi." gibi bir ozet gosterilir.
+  **Makrolar**: panelin "Makrolar" bolumundeki + ile birden fazla komutu
+  (baglanti acma, medya - oynat/duraklat/sesi ac-kis/sessize al, guc -
+  kilitle/uyku) tek bir adimlar dizisi olarak kaydedip tek dokunusla
+  sirayla calistirabilirsiniz (orn. "Çalışma Modu" makrosu bir muzik
+  linki acip sesi kisabilir). Adimlar aktif bilgisayarda sirayla
+  denenir; bir baglanti-acma adimi basarisiz olursa yukaridaki
+  cevrimdisi kuyruga eklenir ve kalan adimlar yine de denenir - medya/
+  guc adimlari (kuyruklama disindaki ayni gerekceyle) dogrudan
+  basarisiz sayilir. Calistirma sonunda "makrosu: 2 tamamlandı, 1
+  kuyruğa eklendi." gibi bir ozet gosterilir.
   Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
   sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
   parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere
