@@ -25,6 +25,7 @@ import '../widgets/notification_history_sheet.dart';
 import '../widgets/reminder_dialog.dart';
 import '../widgets/remote_control_sheet.dart';
 import '../widgets/roaming_cat.dart';
+import '../widgets/secure_notepad_sheet.dart';
 import '../widgets/settings_dialog.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -493,6 +494,16 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openSecureNotepad() {
+    _registerActivity();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const SecureNotepadSheet(),
+    );
+  }
+
   Future<void> _openReminderDialog() async {
     _registerActivity();
     final minutes = await showDialog<int>(
@@ -624,6 +635,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     tooltip: 'Bildirim Geçmişi',
                     onPressed: _openNotificationHistory,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 168,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.lock_outline,
+                      color: context.colors.textMuted,
+                    ),
+                    tooltip: 'Şifreli Not Defteri',
+                    onPressed: _openSecureNotepad,
                   ),
                 ),
                 Positioned(

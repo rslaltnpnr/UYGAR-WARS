@@ -35,6 +35,14 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   listesini gosterir - telefonun kendi bildirim gecmisinden silinse de
   burada kalir; "Temizle" ile sifirlanabilir. Masaustu suruumundeki
   "Bildirim Gecmisi" ile ayni fikirde, ayri saklanan bir kayit.
+- **Şifreli Not Defteri** (kilit ikonu): kendi belirlediginiz bir sifreyle
+  korunan, yalnizca bu cihazda saklanan bir not listesi. Notlar
+  AES-256-GCM ile sifrelenir; anahtar sifrenizden PBKDF2-HMAC-SHA256 ile
+  turetilir ve hicbir yerde saklanmaz - uygulama kapanip acildiginda (ya
+  da "Kilitle" ile elle) defter tekrar sifre istemeye doner. Sifreyi
+  unutursanız notlari kurtarmanin bir yolu yoktur (bu, gercekten sifreli
+  olmanin bedelidir); "Şifremi unuttum" secenegi tum notlari silip
+  sifirdan yeni bir sifreyle baslamanizi saglar.
 - Gemini istekleri: 503 (asiri yuklenme) ve 404 (model kaldirildi)
   durumlarinda masaustu suruumundeki gibi otomatik tekrar deneme ve
   yedek modele (`gemini-3.6-flash`) gecis var.
