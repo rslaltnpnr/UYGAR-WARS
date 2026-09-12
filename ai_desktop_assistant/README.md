@@ -22,9 +22,15 @@ karakteri (PyQt6).
 - **Uzaktan kumanda**: `ai_cat_mobile` (Android) uygulamasindan ayni
   Wi-Fi agi uzerinden bir baglanti gonderip bilgisayarda acilmasini
   saglayabilirsiniz (orn. bir YouTube linki -> muzik/video calar).
-  Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port, PIN ve sertifika
-  parmak izini gorursunuz; bunlari telefon uygulamasindaki "Bilgisayari
-  Kumanda Et" panelinde bir kez girmeniz yeterli. Baglanti ac(-mak)nin
+  Sag tik > "Uzaktan Kumanda Bilgisi" ile IP, port, PIN, sertifika
+  parmak izini ve **son baglanan cihazlarin listesini** (IP, son gorulme
+  zamani, son kullandigi uc nokta, istek sayisi) gorursunuz; bunlari
+  telefon uygulamasindaki "Bilgisayari Kumanda Et" panelinde bir kez
+  girmeniz yeterli. Kalici bir "oturum" kavrami yoktur - her istek kendi
+  basina PIN ile dogrulanir - bu yuzden ayni penceredeki "PIN'i Yenile"
+  butonu, PIN'i bilen butun cihazlarin erisimini aninda gecersiz kilarak
+  "tum baglantilari sonlandirma" islevi gorur (ve baglanti listesini de
+  sifirlar). Baglanti ac(-mak)nin
   yaninda: **medya kontrolu** (oynat/duraklat, ileri/geri, ses), bilgisayari
   **kilitleme/uyku moduna alma** ve kucultulmus bir **ekran goruntusu**
   isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim

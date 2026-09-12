@@ -407,6 +407,23 @@ def merge_history_entries(existing_entries, new_entries):
     return added
 
 
+def record_connection(recent_connections, client_ip, endpoint, now_epoch, max_connections):
+    """[recent_connections] (IP -> {"count", "last_seen_epoch", "last_seen",
+    "last_endpoint"}) sozlugunu [client_ip]'den basariyla dogrulanmis bir
+    istek icin yerinde gunceller. Sozluk [max_connections] farkli IP'yi
+    asarsa, guncellenen IP zaten iclerinde degilse en eski gorulen IP
+    cikarilir (basit bir LRU). RemoteCommandServer.run() ve testler
+    tarafindan paylasilir."""
+    if client_ip not in recent_connections and len(recent_connections) >= max_connections:
+        oldest_ip = min(recent_connections, key=lambda ip: recent_connections[ip]["last_seen_epoch"])
+        recent_connections.pop(oldest_ip, None)
+    conn = recent_connections.setdefault(client_ip, {"count": 0})
+    conn["count"] += 1
+    conn["last_seen_epoch"] = now_epoch
+    conn["last_seen"] = datetime.fromtimestamp(now_epoch).strftime("%Y-%m-%d %H:%M")
+    conn["last_endpoint"] = endpoint
+
+
 def format_history_entries(entries):
     """[entries] listesini (en yeni en ustte) okunabilir duz metne cevirir -
     hem ChatHistoryDialog'un ekran gorunumu hem de disa aktarma (.txt)
@@ -717,6 +734,8 @@ class RemoteCommandServer(QThread):
 
     MAX_ALERTS = 50
 
+    MAX_RECENT_CONNECTIONS = 20
+
     def __init__(self, config: ConfigManager, history: ChatHistoryManager, parent=None):
         super().__init__(parent)
         self.config = config
@@ -727,6 +746,13 @@ class RemoteCommandServer(QThread):
         # append/otomatik-trim ile) referans olarak paylasir.
         self.alerts = deque(maxlen=self.MAX_ALERTS)
         self._next_alert_id = 1
+        # IP -> {"last_seen", "last_endpoint", "count"} - PIN'i basariyla
+        # dogrulamis en son istemciler (kalici bir "oturum" kavrami yok,
+        # her istek kendi basina PIN ile dogrulanir - bu yuzden "aktif
+        # oturumlari sonlandirmak" burada PIN'i yenilemek anlamina gelir,
+        # bkz. _show_remote_info). Sadece son MAX_RECENT_CONNECTIONS farkli
+        # IP tutulur.
+        self.recent_connections = {}
 
     def add_alert(self, message):
         """Ana/GUI thread'inden cagrilir (orn. bir Gemini hatasi olustugunda);
@@ -744,6 +770,7 @@ class RemoteCommandServer(QThread):
         config = self.config
         history = self.history
         alerts = self.alerts
+        recent_connections = self.recent_connections
         open_signal = self.command_received
         media_signal = self.media_command_received
         power_signal = self.power_command_received
@@ -807,6 +834,13 @@ class RemoteCommandServer(QThread):
                     return
 
                 failed_attempts.pop(client_ip, None)
+                record_connection(
+                    recent_connections,
+                    client_ip,
+                    self.path,
+                    time.time(),
+                    RemoteCommandServer.MAX_RECENT_CONNECTIONS,
+                )
 
                 if self.path == "/open":
                     url = str(data.get("url", "")).strip()
@@ -1880,13 +1914,33 @@ class CatCharacter(QWidget):
             f"Port: {REMOTE_SERVER_PORT}\n"
             f"PIN: {pin}\n"
             f"{fingerprint_line}"
+            f"\n{self._recent_connections_text()}"
         )
         regen_button = box.addButton("PIN'i Yenile", QMessageBox.ButtonRole.ActionRole)
         box.addButton(QMessageBox.StandardButton.Close)
         box.exec()
         if box.clickedButton() == regen_button:
             self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
+            # Yeni PIN'i bilmeyen eski baglantilar artik dogrulanamaz -
+            # "aktif oturumlari sonlandirma" karsiligi budur (bkz. sinif
+            # docstring'i); listeyi de bu yuzden temizliyoruz.
+            self.remote_server.recent_connections.clear()
             self._show_remote_info()
+
+    def _recent_connections_text(self):
+        connections = self.remote_server.recent_connections
+        if not connections:
+            return "Son baglanan cihaz yok."
+        rows = sorted(
+            connections.items(), key=lambda kv: kv[1]["last_seen_epoch"], reverse=True
+        )
+        lines = ["Son baglanan cihazlar:"]
+        for conn_ip, conn in rows[:10]:
+            lines.append(
+                f"  {conn_ip} - son gorulme {conn['last_seen']} "
+                f"({conn['last_endpoint']}, {conn['count']} istek)"
+            )
+        return "\n".join(lines)
 
     # -- hatirlatici --------------------------------------------------------
 
