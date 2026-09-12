@@ -1237,14 +1237,18 @@ class RemoteCommandServer(QThread):
         if not ensure_remote_tls_cert():
             return  # sertifika olusturulamadi - uzaktan kumanda olmadan devam et
 
-        bind_ip = get_local_ip() or "0.0.0.0"
+        # "0.0.0.0": yalnizca yerel ag arayuzune degil, TUM aglara
+        # (Tailscale gibi sanal arayuzler dahil) baglanti kabul eder -
+        # tek bir arayuze (orn. get_local_ip()'in dondurdugu Wi-Fi IP'si)
+        # baglanirsak, o arayuzden gelmeyen istekler (orn. Tailscale
+        # uzerinden gelen) sessizce reddedilir; PIN + TLS + sertifika
+        # dogrulamasi zaten kim baglanirsa baglansin ayni korumayi saglar,
+        # bu yuzden tum arayuzlerde dinlemek yeni bir guvenlik riski
+        # eklemez.
         try:
-            self._httpd = http.server.ThreadingHTTPServer((bind_ip, REMOTE_SERVER_PORT), Handler)
+            self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", REMOTE_SERVER_PORT), Handler)
         except OSError:
-            try:
-                self._httpd = http.server.ThreadingHTTPServer(("0.0.0.0", REMOTE_SERVER_PORT), Handler)
-            except OSError:
-                return
+            return
 
         try:
             ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
