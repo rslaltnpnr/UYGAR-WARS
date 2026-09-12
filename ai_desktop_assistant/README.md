@@ -64,6 +64,18 @@ karakteri (PyQt6).
   - PIN yanlissa istek reddedilir; ust uste 5 yanlis denemeden sonra o IP
     60 saniye kilitlenir (kaba kuvvet korumasi); PIN karsilastirmasi
     zamanlama yan kanal saldirilarina karsi sabit-zamanlidir.
+  - **Ayni Wi-Fi agi disindan (evden uzaktayken) erisim**: bu uygulama
+    dogrudan IP:port'a baglanir, kendi ag altyapisini kurmaz - bu yuzden
+    ayni yerel ag disindan erismenin onerilen yolu her iki cihaza da
+    [Tailscale](https://tailscale.com) (ucretsiz) kurup ayni hesapla
+    giris yapmaktir. Ikisi de ayni "tailnet"e katildiginda, telefon
+    uygulamasindaki "Bilgisayar IP" alanina bu bilgisayarin normal
+    yerel IP'si yerine Tailscale IP'sini (100.x.x.x - Tailscale
+    uygulamasinda ya da `tailscale ip -4` komutuyla gorulur) girmeniz
+    yeterli; PIN, TLS ve sertifika dogrulama tamamen ayni sekilde
+    calismaya devam eder. Router'da port yonlendirmeye ya da bu
+    bilgisayarin bir portunu dogrudan internete acmaya gerek kalmaz
+    (Tailscale WireGuard tabanli ozel bir ag kurar).
 - **Bildirim Gecmisi**: sag tik menusundeki ayni adli pencereden,
   uygulamanin sistem tepsisi araciligiyla gosterdigi tum bildirimlerin
   (hatirlatici kuruldu/ates aldi, yeni surum mevcut) kalici bir listesini
