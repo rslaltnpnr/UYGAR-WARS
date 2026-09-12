@@ -18,6 +18,7 @@ from main import (
     find_release_with_asset,
     format_access_log_line,
     format_history_entries,
+    format_notifications,
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
@@ -389,3 +390,22 @@ class TestTailAccessLog:
         with open(path, "w", encoding="utf-8") as f:
             f.write("tek-satir\n")
         assert tail_access_log(path, max_lines=50) == ["tek-satir"]
+
+
+class TestFormatNotifications:
+    def test_en_yeni_en_ustte(self):
+        entries = [
+            {"time": "2026-01-01 10:00", "title": "Baslik1", "message": "Mesaj1"},
+            {"time": "2026-01-01 11:00", "title": "Baslik2", "message": "Mesaj2"},
+        ]
+        text = format_notifications(entries)
+        assert text.index("Baslik2") < text.index("Baslik1")
+
+    def test_baslik_ve_mesaj_icerir(self):
+        entries = [{"time": "2026-01-01 10:00", "title": "T", "message": "M"}]
+        text = format_notifications(entries)
+        assert "[2026-01-01 10:00] T" in text
+        assert "M" in text
+
+    def test_bos_liste_bos_metin_doner(self):
+        assert format_notifications([]) == ""

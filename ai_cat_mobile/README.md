@@ -30,6 +30,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
   cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.
+- **Bildirim Gecmisi** (zil ikonu): uygulamanin gosterdigi tum
+  bildirimlerin (masaustu uyarilari, kurulan hatirlaticilar) kalici bir
+  listesini gosterir - telefonun kendi bildirim gecmisinden silinse de
+  burada kalir; "Temizle" ile sifirlanabilir. Masaustu suruumundeki
+  "Bildirim Gecmisi" ile ayni fikirde, ayri saklanan bir kayit.
 - Gemini istekleri: 503 (asiri yuklenme) ve 404 (model kaldirildi)
   durumlarinda masaustu suruumundeki gibi otomatik tekrar deneme ve
   yedek modele (`gemini-3.6-flash`) gecis var.

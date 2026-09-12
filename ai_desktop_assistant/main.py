@@ -84,9 +84,11 @@ def resource_path(relative_path):
 CONFIG_PATH = os.path.join(base_dir(), "config.json")
 HISTORY_PATH = os.path.join(base_dir(), "chat_history.json")
 ACCESS_LOG_PATH = os.path.join(base_dir(), "remote_access.log")
+NOTIFICATION_LOG_PATH = os.path.join(base_dir(), "notifications.json")
 ASSETS_DIR = resource_path("assets")
 MAX_HISTORY_ENTRIES = 200
 ACCESS_LOG_MAX_BYTES = 512 * 1024
+MAX_NOTIFICATION_ENTRIES = 50
 ACCESS_LOG_DISPLAY_LINES = 50
 
 
@@ -384,6 +386,66 @@ class ChatHistoryManager:
     def clear(self):
         self.entries = []
         self.save()
+
+
+# --------------------------------------------------------------------------
+# Bildirim gecmisi (notifications.json)
+# --------------------------------------------------------------------------
+
+class NotificationLog:
+    """Sistem tepsisi (ya da tepsi yoksa mesaj kutusu) araciligiyla
+    kullaniciya gosterilen her bildirimin (hatirlatici kuruldu/ates aldi,
+    guncelleme mevcut vb.) kalici bir kaydi - "Bildirim Gecmisi" menu
+    eylemiyle gorulebilir. Windows'un kendi Eylem Merkezi'nden farkli
+    olarak, uygulama yeniden baslatilsa da (Eylem Merkezi bildirim
+    kapatilinca kaybolabilir) burada kalir."""
+
+    def __init__(self, path):
+        self.path = path
+        self.entries = []
+        self.load()
+
+    def load(self):
+        if os.path.exists(self.path):
+            try:
+                with open(self.path, "r", encoding="utf-8") as f:
+                    self.entries = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                self.entries = []
+
+    def save(self):
+        try:
+            with open(self.path, "w", encoding="utf-8") as f:
+                json.dump(self.entries, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
+
+    def add(self, title, message):
+        self.entries.append(
+            {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "title": title,
+                "message": message,
+            }
+        )
+        if len(self.entries) > MAX_NOTIFICATION_ENTRIES:
+            self.entries = self.entries[-MAX_NOTIFICATION_ENTRIES:]
+        self.save()
+
+    def clear(self):
+        self.entries = []
+        self.save()
+
+
+def format_notifications(entries):
+    """[entries] listesini (en yeni en ustte) okunabilir duz metne
+    cevirir - Bildirim Gecmisi penceresinde gosterilir."""
+    lines = []
+    for entry in reversed(entries):
+        lines.append(f"[{entry.get('time', '')}] {entry.get('title', '')}")
+        lines.append(entry.get("message", ""))
+        lines.append("")
+    return "\n".join(lines)
 
 
 def merge_history_entries(existing_entries, new_entries):
@@ -1771,6 +1833,7 @@ class CatCharacter(QWidget):
         self.bubble = None
         self.worker = None
         self.history = ChatHistoryManager(HISTORY_PATH)
+        self.notifications = NotificationLog(NOTIFICATION_LOG_PATH)
         self.history_dialog = None
         self._pending_question = None
 
@@ -2069,6 +2132,21 @@ class CatCharacter(QWidget):
         box.setText(text)
         box.exec()
 
+    def _show_notification_history(self):
+        self._register_activity()
+        if not self.notifications.entries:
+            text = "Henuz bir bildirim yok."
+        else:
+            text = format_notifications(self.notifications.entries)
+        box = QMessageBox(self)
+        box.setWindowTitle("Bildirim Gecmisi")
+        box.setText(text)
+        clear_button = box.addButton("Temizle", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() == clear_button:
+            self.notifications.clear()
+
     # -- hatirlatici --------------------------------------------------------
 
     def _create_reminder(self):
@@ -2087,32 +2165,34 @@ class CatCharacter(QWidget):
 
         QTimer.singleShot(minutes * 60 * 1000, lambda: self._fire_reminder(text))
 
+        confirm_message = f"{minutes} dakika sonra hatirlatilacaksiniz."
         if self.tray_icon is not None:
             self.tray_icon.showMessage(
                 "Hatirlatici Kuruldu",
-                f"{minutes} dakika sonra hatirlatilacaksiniz.",
+                confirm_message,
                 QSystemTrayIcon.MessageIcon.Information,
                 4000,
             )
         else:
-            QMessageBox.information(
-                self, "Hatirlatici Kuruldu", f"{minutes} dakika sonra hatirlatilacaksiniz."
-            )
+            QMessageBox.information(self, "Hatirlatici Kuruldu", confirm_message)
+        self.notifications.add("Hatirlatici Kuruldu", confirm_message)
 
     def _fire_reminder(self, text):
         self._register_activity()
         self.revert_timer.stop()
         self._set_state("smile")
         self.revert_timer.start(REVERT_TO_NORMAL_MS)
+        reminder_title = f"{self.config.get('character_name')} Hatirlatiyor"
         if self.tray_icon is not None:
             self.tray_icon.showMessage(
-                f"{self.config.get('character_name')} Hatirlatiyor",
+                reminder_title,
                 text,
                 QSystemTrayIcon.MessageIcon.Information,
                 10000,
             )
         else:
             QMessageBox.information(self, "Hatirlatma", text)
+        self.notifications.add(reminder_title, text)
 
     # -- yedekleme / geri yukleme -------------------------------------------
 
@@ -2243,12 +2323,14 @@ class CatCharacter(QWidget):
     def _on_update_available(self, tag, html_url, download_url, checksum_url):
         self._last_update_info = (tag, html_url, download_url, checksum_url)
         if not self._update_check_manual and self.tray_icon is not None:
+            update_message = f"AI Kedi Asistani {tag} yayinlandi. Detaylar icin tiklayin."
             self.tray_icon.showMessage(
                 "Yeni surum mevcut",
-                f"AI Kedi Asistani {tag} yayinlandi. Detaylar icin tiklayin.",
+                update_message,
                 QSystemTrayIcon.MessageIcon.Information,
                 8000,
             )
+            self.notifications.add("Yeni surum mevcut", update_message)
 
     def _on_update_check_finished(self, success, error_message):
         if not self._update_check_manual:
@@ -2433,6 +2515,10 @@ class CatCharacter(QWidget):
         access_log_action = QAction("Erisim Gunlugu", self)
         access_log_action.triggered.connect(self._show_access_log)
         menu.addAction(access_log_action)
+
+        notification_history_action = QAction("Bildirim Gecmisi", self)
+        notification_history_action.triggered.connect(self._show_notification_history)
+        menu.addAction(notification_history_action)
 
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)

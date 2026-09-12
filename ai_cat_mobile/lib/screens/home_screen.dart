@@ -12,6 +12,7 @@ import '../models/remote_profile.dart';
 import '../services/backup_service.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
+import '../services/notification_history_service.dart';
 import '../services/reminder_service.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
@@ -19,6 +20,7 @@ import '../services/widget_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/cat_sprite.dart';
 import '../widgets/chat_sheet.dart';
+import '../widgets/notification_history_sheet.dart';
 import '../widgets/reminder_dialog.dart';
 import '../widgets/remote_control_sheet.dart';
 import '../widgets/roaming_cat.dart';
@@ -43,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _gemini = GeminiService();
   final _remoteService = RemoteControlService();
   final _notifications = ReminderService();
+  final _notificationHistory = NotificationHistoryService();
 
   SettingsService? _settings;
   HistoryService? _history;
@@ -304,10 +307,9 @@ class _HomeScreenState extends State<HomeScreen> {
         if (id > maxId) maxId = id;
         final message = alert['message'] as String? ?? '';
         if (message.isEmpty) continue;
-        await _notifications.showAlert(
-          title: '${profile.name} - Uyarı',
-          message: message,
-        );
+        final alertTitle = '${profile.name} - Uyarı';
+        await _notifications.showAlert(title: alertTitle, message: message);
+        await _notificationHistory.add(title: alertTitle, message: message);
       }
       settings.remoteProfiles = profiles
           .map(
@@ -450,6 +452,16 @@ class _HomeScreenState extends State<HomeScreen> {
     _pollForDesktopAlerts();
   }
 
+  void _openNotificationHistory() {
+    _registerActivity();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const NotificationHistorySheet(),
+    );
+  }
+
   Future<void> _openReminderDialog() async {
     _registerActivity();
     final minutes = await showDialog<int>(
@@ -569,6 +581,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     tooltip: 'Hatırlatıcı Kur',
                     onPressed: _openReminderDialog,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 128,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.notifications_outlined,
+                      color: context.colors.textMuted,
+                    ),
+                    tooltip: 'Bildirim Geçmişi',
+                    onPressed: _openNotificationHistory,
                   ),
                 ),
                 Positioned(

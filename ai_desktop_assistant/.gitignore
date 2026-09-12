@@ -1,6 +1,7 @@
 config.json
 chat_history.json
 remote_access.log
+notifications.json
 backups/
 remote_cert.pem
 remote_key.pem
