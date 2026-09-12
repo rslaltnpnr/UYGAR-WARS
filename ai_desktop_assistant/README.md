@@ -30,7 +30,10 @@ karakteri (PyQt6).
   basina PIN ile dogrulanir - bu yuzden ayni penceredeki "PIN'i Yenile"
   butonu, PIN'i bilen butun cihazlarin erisimini aninda gecersiz kilarak
   "tum baglantilari sonlandirma" islevi gorur (ve baglanti listesini de
-  sifirlar). Baglanti ac(-mak)nin
+  sifirlar). Bu canli listeden ayri olarak, sag tik > "Erisim Gunlugu"
+  ile `remote_access.log` dosyasina yazilan (uygulama yeniden
+  baslatilsa da kalici kalan) son 50 basarili/basarisiz istegi
+  gorebilirsiniz - kalici bir denetim (audit) kaydi. Baglanti ac(-mak)nin
   yaninda: **medya kontrolu** (oynat/duraklat, ileri/geri, ses), bilgisayari
   **kilitleme/uyku moduna alma** ve kucultulmus bir **ekran goruntusu**
   isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim
