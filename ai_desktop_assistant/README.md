@@ -156,3 +156,30 @@ bunu otomatik yapar:
 
 Etiket adi `v` ile baslamali (orn. `v1.2.0`) - surum karsilastirma
 mantigi bunu bekler.
+
+### .exe kod imzalama (opsiyonel)
+
+`.exe` su an imzasiz - Windows'ta "Bilinmeyen Yayimci" uyarisi gosterir
+ve bazi antivirus/guvenlik yazilimlari (orn. self-update akisindaki
+kendi-kendini-degistirme davranisini) daha supheli bulabilir.
+
+Repoya `WINDOWS_CODESIGN_PFX_BASE64` ve `WINDOWS_CODESIGN_PFX_PASSWORD`
+secret'lari eklenirse `release-desktop.yml` `.exe`'yi otomatik imzalar
+(secret yoksa bu adim atlanir, build kirilmaz):
+
+1. `WINDOWS_CODESIGN_PFX_BASE64` secret'ina imzalama sertifikasinin
+   (`.pfx`) base64 kodlanmis halini, `WINDOWS_CODESIGN_PFX_PASSWORD`
+   secret'ina sertifikanin parolasini girin.
+2. Sertifika dosyasini guvenli bir yere yedekleyin - repoya **asla**
+   commitlemeyin.
+
+**Onemli - bunun ne yaptigi ve ne yapmadigi:** Kendinden imzali bir
+sertifika (bu repo icin uretilip size gonderilen gibi) sadece
+"Yayimci: AI Kedi Asistani" bilgisini gosterir ve `.exe`'nin
+yayinlandiktan sonra degistirilmedigini dogrular - Windows
+SmartScreen'in ya da antivirus yazilimlarinin guven/itibar
+uyarilarini **kaldirmaz**. Bunun icin guvenilir bir sertifika otoritesinden
+(CA) satin alinmis (ya da bazi acik kaynak projeler icin ucretsiz sunulan,
+orn. SignPath.io) gercek bir kod imzalama sertifikasi gerekir - bu, parayla
+(ya da uygunluk sartlariyla) elde edilen, bu ortamda benim
+uretemeyecegim bir sey.
