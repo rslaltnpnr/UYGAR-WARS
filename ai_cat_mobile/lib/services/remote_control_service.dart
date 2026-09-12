@@ -10,7 +10,16 @@ import 'package:crypto/crypto.dart';
 class RemoteControlException implements Exception {
   final String message;
 
-  RemoteControlException(this.message);
+  /// true ise hata baglanti kurulamamasindan (ag erisilemez, zaman asimi)
+  /// kaynaklanir - PIN hatasi, sunucu reddi ya da sertifika uyusmazligi
+  /// gibi "bilgisayara ulasildi ama istek reddedildi" durumlarindan farkli
+  /// olarak, bu tur hatalar cevrimdisi komut kuyruguna alinabilir aday
+  /// olaylardir (bkz. CommandQueueService) - baglanti kurulamadiginda
+  /// tekrar denemek anlamli, ama yanlis PIN'i "kuyruga alip beklemek"
+  /// anlamsizdir.
+  final bool isNetworkError;
+
+  RemoteControlException(this.message, {this.isNetworkError = false});
 
   @override
   String toString() => message;
@@ -158,6 +167,7 @@ class RemoteControlService {
       throw RemoteControlException(
         'Bilgisayara ulasilamadi. Ayni Wi-Fi agina bagli oldugunuzdan ve '
         'IP/portun dogru oldugundan emin olun.',
+        isNetworkError: true,
       );
     } finally {
       client.close(force: true);

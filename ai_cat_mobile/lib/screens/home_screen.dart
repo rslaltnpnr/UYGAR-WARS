@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_entry.dart';
 import '../models/remote_profile.dart';
 import '../services/backup_service.dart';
+import '../services/command_queue_service.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
 import '../services/notification_history_service.dart';
@@ -46,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _remoteService = RemoteControlService();
   final _notifications = ReminderService();
   final _notificationHistory = NotificationHistoryService();
+  final _commandQueue = CommandQueueService();
 
   SettingsService? _settings;
   HistoryService? _history;
@@ -311,23 +313,52 @@ class _HomeScreenState extends State<HomeScreen> {
         await _notifications.showAlert(title: alertTitle, message: message);
         await _notificationHistory.add(title: alertTitle, message: message);
       }
+      final updatedProfile = profile.copyWith(
+        certFingerprint: result.fingerprint,
+        lastAlertId: maxId,
+      );
       settings.remoteProfiles = profiles
-          .map(
-            (p) => p.id == profile.id
-                ? p.copyWith(
-                    certFingerprint: result.fingerprint,
-                    lastAlertId: maxId,
-                  )
-                : p,
-          )
+          .map((p) => p.id == profile.id ? updatedProfile : p)
           .toList();
       await _updateWidgetStatus(profileName: profile.name, connected: true);
+      await _flushQueuedCommands(updatedProfile);
     } catch (_) {
       // bilgisayar kapali/ag disinda olabilir - sessizce yok say
       await _updateWidgetStatus(profileName: profile.name, connected: false);
     } finally {
       _polling = false;
     }
+  }
+
+  /// [profile]'a baglanti kurulabildigi her onaylandiginda (basarili bir
+  /// /alerts yoklamasi sonrasi) cagrilir - bu profil icin kuyrukta bekleyen
+  /// varsa (bkz. CommandQueueService, RemoteControlSheet._send) gonderilmeye
+  /// calisilir. Basariyla gonderilenler icin yerel bildirim gosterilir,
+  /// boylece uygulamayi acmadan da "kuyruktaki linkiniz gonderildi"
+  /// bilgisini alirsiniz.
+  Future<void> _flushQueuedCommands(RemoteProfile profile) async {
+    final settings = _settings;
+    if (settings == null) return;
+    final sentCount = await _commandQueue.flushFor(
+      profile: profile,
+      sendOpenUrl: _remoteService.openUrl,
+      onFingerprintUpdate: (fingerprint) {
+        settings.remoteProfiles = settings.remoteProfiles
+            .map(
+              (p) => p.id == profile.id
+                  ? p.copyWith(certFingerprint: fingerprint)
+                  : p,
+            )
+            .toList();
+      },
+    );
+    if (sentCount == 0) return;
+    final title = '${profile.name} - Kuyruklu Komutlar';
+    final message = sentCount == 1
+        ? 'Bekleyen 1 bağlantı gönderildi.'
+        : 'Bekleyen $sentCount bağlantı gönderildi.';
+    await _notifications.showAlert(title: title, message: message);
+    await _notificationHistory.add(title: title, message: message);
   }
 
   /// Ana ekran widget'indaki baglanti durumu satirini gunceller. Widget

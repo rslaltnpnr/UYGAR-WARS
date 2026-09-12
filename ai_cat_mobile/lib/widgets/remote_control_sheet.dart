@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
+import '../services/command_queue_service.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -41,10 +43,12 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   final _pinController = TextEditingController();
   final _urlController = TextEditingController();
   final _service = RemoteControlService();
+  final _queueService = CommandQueueService();
 
   bool _busy = false;
   String? _status;
   bool _statusIsError = false;
+  int _queuedCount = 0;
 
   @override
   void initState() {
@@ -53,6 +57,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     _activeProfileId = widget.settings.activeProfileId ??
         (_profiles.isNotEmpty ? _profiles.first.id : null);
     _loadActiveProfileIntoFields();
+    _refreshQueuedCount();
     if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
       _urlController.text = widget.initialUrl!;
     }
@@ -134,6 +139,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     });
     widget.settings.activeProfileId = id;
     _loadActiveProfileIntoFields();
+    _refreshQueuedCount();
   }
 
   Future<void> _addProfile() async {
@@ -211,7 +217,8 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   }
 
   Future<void> _send() async {
-    if (_busy || _activeProfile == null) return;
+    final profile = _activeProfile;
+    if (_busy || profile == null) return;
     _saveConnectionInfo();
     setState(() {
       _busy = true;
@@ -223,7 +230,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         port: int.tryParse(_portController.text.trim()) ?? 8765,
         pin: _pinController.text.trim(),
         url: _urlController.text,
-        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
+        pinnedFingerprint: profile.certFingerprint,
       );
       _updateActiveFingerprint(result.fingerprint);
       if (!mounted) return;
@@ -232,10 +239,59 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         _statusIsError = false;
       });
     } catch (exc) {
+      if (exc is RemoteControlException && exc.isNetworkError) {
+        await _queueService.enqueue(
+          QueuedCommand(
+            profileId: profile.id,
+            url: _urlController.text.trim(),
+            queuedAt: DateTime.now(),
+          ),
+        );
+        await _refreshQueuedCount();
+        if (!mounted) return;
+        setState(() {
+          _status = 'Bağlantı yok - komut kuyruğa eklendi, bilgisayara '
+              'ulaşılınca otomatik gönderilecek.';
+          _statusIsError = false;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _status = exc.toString();
+          _statusIsError = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refreshQueuedCount() async {
+    final all = await _queueService.load();
+    if (!mounted) return;
+    setState(() {
+      _queuedCount =
+          all.where((c) => c.profileId == _activeProfileId).length;
+    });
+  }
+
+  Future<void> _flushQueueNow() async {
+    final profile = _activeProfile;
+    if (profile == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      final sent = await _queueService.flushFor(
+        profile: profile,
+        sendOpenUrl: _service.openUrl,
+        onFingerprintUpdate: _updateActiveFingerprint,
+      );
+      await _refreshQueuedCount();
       if (!mounted) return;
       setState(() {
-        _status = exc.toString();
-        _statusIsError = true;
+        _status = sent > 0
+            ? '$sent kuyruklu komut gönderildi.'
+            : 'Hala bağlanılamıyor - komutlar kuyrukta bekliyor.';
+        _statusIsError = sent == 0;
       });
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -608,6 +664,25 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                         : const Icon(Icons.send),
                     label: const Text('Bilgisayarda Aç'),
                   ),
+                  if (_queuedCount > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.schedule, size: 16, color: colors.textMuted),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Kuyrukta $_queuedCount bağlantı bekliyor',
+                            style: TextStyle(color: colors.textMuted, fontSize: 12),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _busy ? null : _flushQueueNow,
+                          child: const Text('Şimdi Dene'),
+                        ),
+                      ],
+                    ),
+                  ],
                   Divider(color: colors.divider, height: 32),
                   Text(
                     'Medya Kontrolü',
