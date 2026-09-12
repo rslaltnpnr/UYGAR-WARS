@@ -144,6 +144,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case WidgetLaunchAction.remoteControl:
         _openRemoteControl();
         break;
+      case WidgetLaunchAction.reminder:
+        _openReminderDialog();
+        break;
     }
   }
 
@@ -334,6 +337,17 @@ class _HomeScreenState extends State<HomeScreen> {
         'widget_connection_status',
         connected ? 'connected' : 'disconnected',
       );
+      final settings = _settings;
+      if (settings != null) {
+        await HomeWidget.saveWidgetData<String>(
+          'widget_slot1_action',
+          settings.widgetSlot1Action.uriValue,
+        );
+        await HomeWidget.saveWidgetData<String>(
+          'widget_slot2_action',
+          settings.widgetSlot2Action.uriValue,
+        );
+      }
       await HomeWidget.updateWidget(androidName: 'CatWidgetProvider');
     } catch (_) {
       // widget ana ekrana eklenmemis olabilir - onemli degil

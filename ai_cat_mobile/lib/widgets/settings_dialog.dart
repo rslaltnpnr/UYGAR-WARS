@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/backup_service.dart';
@@ -30,6 +31,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late final TextEditingController _apiKeyController;
   late ThemeMode _themeMode;
   late bool _autoBackupEnabled;
+  late WidgetLaunchAction _widgetSlot1Action;
+  late WidgetLaunchAction _widgetSlot2Action;
   bool _obscureKey = true;
 
   @override
@@ -41,6 +44,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _apiKeyController = TextEditingController(text: widget.settings.apiKey);
     _themeMode = widget.settings.themeMode;
     _autoBackupEnabled = widget.settings.autoBackupEnabled;
+    _widgetSlot1Action = widget.settings.widgetSlot1Action;
+    _widgetSlot2Action = widget.settings.widgetSlot2Action;
   }
 
   @override
@@ -58,6 +63,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
     widget.settings.apiKey = _apiKeyController.text.trim();
     widget.settings.themeMode = _themeMode;
     widget.settings.autoBackupEnabled = _autoBackupEnabled;
+    widget.settings.widgetSlot1Action = _widgetSlot1Action;
+    widget.settings.widgetSlot2Action = _widgetSlot2Action;
+    HomeWidget.saveWidgetData<String>(
+      'widget_slot1_action',
+      _widgetSlot1Action.uriValue,
+    );
+    HomeWidget.saveWidgetData<String>(
+      'widget_slot2_action',
+      _widgetSlot2Action.uriValue,
+    );
+    HomeWidget.updateWidget(androidName: 'CatWidgetProvider');
     widget.onThemeModeChanged(_themeMode);
     Navigator.of(context).pop();
   }
@@ -261,6 +277,28 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 label: const Text('Ana Ekrana Widget Ekle'),
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _WidgetActionDropdown(
+                    label: '1. Buton',
+                    value: _widgetSlot1Action,
+                    onChanged: (value) =>
+                        setState(() => _widgetSlot1Action = value),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _WidgetActionDropdown(
+                    label: '2. Buton',
+                    value: _widgetSlot2Action,
+                    onChanged: (value) =>
+                        setState(() => _widgetSlot2Action = value),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -278,6 +316,51 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
         ElevatedButton(onPressed: _save, child: const Text('Kaydet')),
       ],
+    );
+  }
+}
+
+/// Ana ekran widget'inin iki butonundan biri icin eylem secici
+/// (Sohbet/Kumanda/Hatırlatıcı). SettingsDialog disinda kullanilmadigi
+/// icin ozel (private) tutuluyor.
+class _WidgetActionDropdown extends StatelessWidget {
+  final String label;
+  final WidgetLaunchAction value;
+  final ValueChanged<WidgetLaunchAction> onChanged;
+
+  const _WidgetActionDropdown({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return DropdownButtonFormField<WidgetLaunchAction>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: colors.textMuted, fontSize: 11),
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 4,
+        ),
+      ),
+      style: TextStyle(color: colors.textPrimary, fontSize: 12),
+      items: WidgetLaunchAction.values
+          .map(
+            (action) => DropdownMenuItem(
+              value: action,
+              child: Text(action.label),
+            ),
+          )
+          .toList(),
+      onChanged: (action) {
+        if (action != null) onChanged(action);
+      },
     );
   }
 }

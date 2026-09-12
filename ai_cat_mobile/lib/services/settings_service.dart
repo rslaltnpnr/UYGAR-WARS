@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/remote_profile.dart';
+import 'widget_service.dart';
 
 /// Ayarlari (API anahtari, kedi ismi, model adi) cihazda saklar.
 ///
@@ -26,6 +27,8 @@ class SettingsService {
   static const _keyThemeMode = 'theme_mode';
   static const _keyAutoBackupEnabled = 'auto_backup_enabled';
   static const _keyAutoBackupLast = 'auto_backup_last';
+  static const _keyWidgetSlot1Action = 'widget_slot1_action';
+  static const _keyWidgetSlot2Action = 'widget_slot2_action';
 
   final SharedPreferences _prefs;
 
@@ -128,4 +131,19 @@ class SettingsService {
       _prefs.setString(_keyAutoBackupLast, value);
     }
   }
+
+  /// Ana ekran widget'inin iki butonuna atanan eylemler - varsayilan,
+  /// widget'in tanitildigindaki sabit davranisiyla ayni (1. buton sohbet,
+  /// 2. buton kumanda).
+  WidgetLaunchAction get widgetSlot1Action =>
+      WidgetLaunchAction.fromUriValue(_prefs.getString(_keyWidgetSlot1Action)) ??
+      WidgetLaunchAction.chat;
+  set widgetSlot1Action(WidgetLaunchAction action) =>
+      _prefs.setString(_keyWidgetSlot1Action, action.uriValue);
+
+  WidgetLaunchAction get widgetSlot2Action =>
+      WidgetLaunchAction.fromUriValue(_prefs.getString(_keyWidgetSlot2Action)) ??
+      WidgetLaunchAction.remoteControl;
+  set widgetSlot2Action(WidgetLaunchAction action) =>
+      _prefs.setString(_keyWidgetSlot2Action, action.uriValue);
 }

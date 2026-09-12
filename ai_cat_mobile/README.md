@@ -84,11 +84,15 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   kaynaklardan yukleme" izni gerekebilir (masaustu suruumunun aksine,
   Android'de guvenlik nedeniyle otomatik arka plan kurulumu yapilmaz).
 - **Ana ekran widget'i**: Ayarlar penceresindeki "Ana Ekrana Widget Ekle"
-  ile (Android 8+, destekleyen baslaticilarda) "Sohbet" ve "Kumanda"
-  butonlarini tasiyan kucuk bir widget'i ana ekraniniza eklersiniz - her
+  ile (Android 8+, destekleyen baslaticilarda) iki hizli erisim
+  butonu tasiyan kucuk bir widget'i ana ekraniniza eklersiniz - her
   ikisi de uygulamayi dogrudan ilgili panelle acar, tek dokunusla.
   Desteklenmiyorsa ana ekranda bos bir alana uzun basip "Widget'lar"
-  menusunden elle de eklenebilir. Widget, eslesik bilgisayarin son
+  menusunden elle de eklenebilir. Bu iki butonun hangi eylemi
+  yapacagi ayni ayarlar penceresindeki "1. Buton" / "2. Buton"
+  secicilerinden **Sohbet / Kumanda / Hatırlatıcı** arasinda
+  degistirilebilir (varsayilan: Sohbet + Kumanda) - Kaydet'e basildiginda
+  widget aninda guncellenir. Widget ayrica eslesik bilgisayarin son
   bilinen baglanti durumunu da gosterir ("Ev · bagli" / "bagli degil") -
   bu bilgi, uygulama acikken zaten calisan 45 saniyelik uyari
   yoklamasindan gelir (widget'in kendisi arka planda ag istegi yapmaz),
