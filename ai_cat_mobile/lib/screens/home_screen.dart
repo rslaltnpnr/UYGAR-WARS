@@ -8,6 +8,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/chat_entry.dart';
+import '../models/remote_profile.dart';
 import '../services/backup_service.dart';
 import '../services/gemini_service.dart';
 import '../services/history_service.dart';
@@ -57,6 +58,13 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _pendingSharedUrl;
   String? _pendingRestoreFilePath;
   WidgetLaunchAction? _pendingWidgetAction;
+
+  // Ana ekrandaki aktif profil gostergesi icin - ana ekran widget'ina
+  // gonderilenle ayni degerler (bkz. _updateWidgetStatus), ama uygulama
+  // icinde de gorunur olmasi icin ayrica burada tutulur. null = henuz
+  // yoklanmadi (uygulama daha yeni acildi).
+  String? _activeProfileName;
+  bool? _connected;
 
   @override
   void initState() {
@@ -328,6 +336,12 @@ class _HomeScreenState extends State<HomeScreen> {
     required String? profileName,
     required bool connected,
   }) async {
+    if (mounted) {
+      setState(() {
+        _activeProfileName = profileName;
+        _connected = connected;
+      });
+    }
     try {
       await HomeWidget.saveWidgetData<String>(
         'widget_profile_name',
@@ -417,7 +431,23 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) =>
           RemoteControlSheet(settings: settings, initialUrl: initialUrl),
-    );
+    ).then((_) {
+      // Panelde profil degistirilmis/duzenlenmis olabilir - ana ekrandaki
+      // gostergeyi hemen tazele, 45sn'lik periyodik yoklamayi bekleme.
+      _pollForDesktopAlerts();
+    });
+  }
+
+  /// Ana ekrandaki aktif profil gostergesine dokununca acilan hizli gecis
+  /// menusu - RemoteControlSheet'i tamamen acmadan (baglanti bilgilerini
+  /// duzenlemeden) profiller arasinda gecis yapmayi saglar.
+  void _quickSwitchProfile(String profileId) {
+    _registerActivity();
+    final settings = _settings;
+    if (settings == null || profileId == settings.activeProfileId) return;
+    settings.activeProfileId = profileId;
+    setState(() => _connected = null); // yeni profil icin durum bilinmiyor
+    _pollForDesktopAlerts();
   }
 
   Future<void> _openReminderDialog() async {
@@ -549,11 +579,113 @@ class _HomeScreenState extends State<HomeScreen> {
                     style: TextStyle(color: context.colors.textMuted, fontSize: 13),
                   ),
                 ),
+                Positioned(top: 32, left: 16, child: _buildProfileIndicator()),
               ],
             );
           },
         ),
       ),
     );
+  }
+
+  /// Aktif profili (varsa baglanti durumuyla birlikte) gosteren, dokununca
+  /// hizli profil gecis menusu acan kucuk bir gosterge. Hic profil yoksa
+  /// dogrudan "Bilgisayarı Kumanda Et" panelini acar (ilk kurulum).
+  Widget _buildProfileIndicator() {
+    final settings = _settings;
+    if (settings == null) return const SizedBox.shrink();
+    final profiles = settings.remoteProfiles;
+    if (profiles.isEmpty) {
+      return _ProfileChip(
+        label: 'Bilgisayar eklenmedi',
+        dotColor: Colors.transparent,
+        onTap: _openRemoteControl,
+      );
+    }
+
+    final activeId = settings.activeProfileId;
+    final active = profiles.firstWhere(
+      (p) => p.id == activeId,
+      orElse: () => profiles.first,
+    );
+    final dotColor = switch (_connected) {
+      true => const Color(0xFF8CFF8C),
+      false => const Color(0xFF9A9AA5),
+      null => Colors.transparent,
+    };
+
+    const manageSentinel = '__manage__';
+    return PopupMenuButton<String>(
+      tooltip: 'Bilgisayar değiştir',
+      onSelected: (value) {
+        if (value == manageSentinel) {
+          _openRemoteControl();
+        } else {
+          _quickSwitchProfile(value);
+        }
+      },
+      itemBuilder: (context) => [
+        for (final RemoteProfile profile in profiles)
+          PopupMenuItem(
+            value: profile.id,
+            child: Row(
+              children: [
+                if (profile.id == active.id)
+                  const Icon(Icons.check, size: 16)
+                else
+                  const SizedBox(width: 16),
+                const SizedBox(width: 8),
+                Text(profile.name),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: manageSentinel,
+          child: Text('Bilgisayarları Yönet...'),
+        ),
+      ],
+      child: _ProfileChip(
+        label: _activeProfileName ?? active.name,
+        dotColor: dotColor,
+      ),
+    );
+  }
+}
+
+class _ProfileChip extends StatelessWidget {
+  final String label;
+  final Color dotColor;
+  final VoidCallback? onTap;
+
+  const _ProfileChip({required this.label, required this.dotColor, this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: colors.panelTranslucent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(color: colors.textMuted, fontSize: 11),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+    return onTap == null ? chip : GestureDetector(onTap: onTap, child: chip);
   }
 }
