@@ -103,6 +103,14 @@ karakteri (PyQt6).
   islem arka plan thread'inde (QThread) calisir, arayuz donmaz. Balonun
   altinda o gun gonderilen istek sayisi gosterilir (Gemini'nin ucretsiz
   kotasi gunluktur).
+- **Baglam farkindaligi**: kedi, "Sohbet Gecmisi"ndeki son birkac (5)
+  hatasiz soru-cevabi da her yeni soruyla birlikte Gemini'ye gonderir -
+  bu sayede "ona gore...", "bir de sunu..." gibi bir onceki cevaba
+  gonderme yapan takip sorularini baglamiyla birlikte anlayabilir
+  (ekran goruntusu yine her seferinde o anki haliyle, yeniden gonderilir).
+  Sag tik menusundeki "Onceki Sohbeti Hatirla (Baglam)" onay kutusuyla
+  kapatilabilir - kapatilirsa her soru, Sohbet Gecmisi'ne bakilmaksizin
+  yeniden bagimsiz olarak sorulur.
 - **Guvenilirlik**: beklenmeyen bir hata olursa traceback `crash.log`'a
   yazilir ve uygulama kendini otomatik olarak yeniden baslatir (cok kisa
   arayla ust uste cokerse - baslangic hatasi dongusu - tekrar baslatmaz,
