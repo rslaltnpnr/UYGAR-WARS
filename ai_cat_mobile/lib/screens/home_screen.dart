@@ -84,6 +84,14 @@ class _HomeScreenState extends State<HomeScreen> {
     // Ana ekran widget'indaki baglanti durumu satirinin ilk 45sn'lik
     // periyodik yoklamayi beklemeden hemen tazelenmesi icin.
     _pollForDesktopAlerts();
+    // Masaustu suruumundeki gunluk otomatik yedeklemenin mobil karsiligi -
+    // burada gercek bir arka plan zamanlayicisi yok, bu yuzden yalnizca
+    // uygulama her acildiginda (foreground) firsatci sekilde kontrol
+    // edilir; ayarlar > "Otomatik Yedekleme" ile kapatilabilir.
+    final settingsForBackup = _settings;
+    if (settingsForBackup != null) {
+      BackupService().maybeAutoBackup(settingsForBackup);
+    }
     final pendingUrl = _pendingSharedUrl;
     if (pendingUrl != null) {
       _pendingSharedUrl = null;

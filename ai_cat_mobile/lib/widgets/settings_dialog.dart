@@ -29,6 +29,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late final TextEditingController _nameController;
   late final TextEditingController _apiKeyController;
   late ThemeMode _themeMode;
+  late bool _autoBackupEnabled;
   bool _obscureKey = true;
 
   @override
@@ -39,6 +40,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     );
     _apiKeyController = TextEditingController(text: widget.settings.apiKey);
     _themeMode = widget.settings.themeMode;
+    _autoBackupEnabled = widget.settings.autoBackupEnabled;
   }
 
   @override
@@ -55,6 +57,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     }
     widget.settings.apiKey = _apiKeyController.text.trim();
     widget.settings.themeMode = _themeMode;
+    widget.settings.autoBackupEnabled = _autoBackupEnabled;
     widget.onThemeModeChanged(_themeMode);
     Navigator.of(context).pop();
   }
@@ -225,6 +228,21 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 'bu uygulamaya "Paylaş" ile gönderin.',
                 style: TextStyle(color: colors.textMuted, fontSize: 11),
               ),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                'Otomatik Yedekleme (Günlük)',
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+              ),
+              subtitle: Text(
+                'Uygulama açıldığında, günde en fazla bir kez sessizce '
+                'cihaza kaydedilir (paylaşım gerekmez).',
+                style: TextStyle(color: colors.textMuted, fontSize: 11),
+              ),
+              value: _autoBackupEnabled,
+              onChanged: (value) => setState(() => _autoBackupEnabled = value),
             ),
             const SizedBox(height: 16),
             Align(

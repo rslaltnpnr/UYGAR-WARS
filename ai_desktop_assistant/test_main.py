@@ -9,6 +9,8 @@ Calistirmak icin:
     pytest
 """
 
+from datetime import datetime, timedelta
+
 from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
@@ -17,7 +19,9 @@ from main import (
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
+    prune_old_backups,
     record_connection,
+    should_run_auto_backup,
 )
 
 
@@ -276,3 +280,59 @@ class TestRecordConnection:
         record_connection(conns, "1.1.1.1", "/media", 3000.0, max_connections=2)
         assert set(conns) == {"1.1.1.1", "2.2.2.2"}
         assert conns["1.1.1.1"]["count"] == 2
+
+
+class TestShouldRunAutoBackup:
+    def test_hic_yedek_yoksa_true_doner(self):
+        assert should_run_auto_backup(None, datetime(2026, 1, 2)) is True
+        assert should_run_auto_backup("", datetime(2026, 1, 2)) is True
+
+    def test_gecersiz_tarih_true_doner(self):
+        assert should_run_auto_backup("gecersiz-tarih", datetime(2026, 1, 2)) is True
+
+    def test_interval_dolmamissa_false_doner(self):
+        last = datetime(2026, 1, 1, 10, 0).isoformat()
+        now = datetime(2026, 1, 1, 20, 0)  # 10 saat sonra
+        assert should_run_auto_backup(last, now, interval_days=1) is False
+
+    def test_interval_dolmussa_true_doner(self):
+        last = datetime(2026, 1, 1, 10, 0).isoformat()
+        now = datetime(2026, 1, 2, 11, 0)  # 25 saat sonra
+        assert should_run_auto_backup(last, now, interval_days=1) is True
+
+    def test_tam_interval_sinirinda_true_doner(self):
+        last = datetime(2026, 1, 1, 10, 0)
+        now = last + timedelta(days=1)
+        assert should_run_auto_backup(last.isoformat(), now, interval_days=1) is True
+
+
+class TestPruneOldBackups:
+    def test_dizin_yoksa_hicbir_sey_yapmaz(self, tmp_path):
+        missing = tmp_path / "yok"
+        prune_old_backups(str(missing), keep_count=3)  # patlamamali
+
+    def test_fazla_dosyalar_en_eskiden_baslayarak_silinir(self, tmp_path):
+        names = [
+            "otomatik-yedek-2026-01-01-000000.json",
+            "otomatik-yedek-2026-01-02-000000.json",
+            "otomatik-yedek-2026-01-03-000000.json",
+        ]
+        for name in names:
+            (tmp_path / name).write_text("{}")
+        prune_old_backups(str(tmp_path), keep_count=2)
+        remaining = sorted(p.name for p in tmp_path.iterdir())
+        assert remaining == names[1:]
+
+    def test_kapasitenin_altindaysa_hicbir_sey_silinmez(self, tmp_path):
+        (tmp_path / "otomatik-yedek-2026-01-01-000000.json").write_text("{}")
+        prune_old_backups(str(tmp_path), keep_count=5)
+        assert len(list(tmp_path.iterdir())) == 1
+
+    def test_ilgisiz_dosyalara_dokunmaz(self, tmp_path):
+        (tmp_path / "baska-dosya.txt").write_text("x")
+        for i in range(3):
+            (tmp_path / f"otomatik-yedek-2026-01-0{i + 1}-000000.json").write_text("{}")
+        prune_old_backups(str(tmp_path), keep_count=1)
+        remaining = sorted(p.name for p in tmp_path.iterdir())
+        assert "baska-dosya.txt" in remaining
+        assert len(remaining) == 2  # baska-dosya.txt + tutulan 1 yedek

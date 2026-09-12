@@ -106,6 +106,10 @@ karakteri (PyQt6).
   JSON dosyasina kaydedebilir, "Yedekten Geri Yukle..." ile baska bir
   bilgisayarda (ya da yeniden kurulumdan sonra) geri yukleyebilirsiniz.
   Yedek dosyasi hassas bilgiler icerir - baskalariyla paylasmayin.
+  Ayrica sag tik menusundeki "Otomatik Yedekleme (Gunluk)" acikken
+  (varsayilan), uygulama gunde bir kez ayni formatta bir yedegi
+  `backups/` klasorune sessizce kaydeder ve en fazla son 7 tanesini
+  tutar (daha eskiler otomatik silinir) - elle mudahale gerekmez.
 - **Pano senkronizasyonu**: telefon uygulamasindan gonderilen metni
   bilgisayarin panosuna yazabilir ya da bilgisayarin panosundaki metni
   telefona cekebilirsiniz (ayni PIN+TLS korumali kanal uzerinden).
