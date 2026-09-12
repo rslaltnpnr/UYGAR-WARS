@@ -799,8 +799,25 @@ def _parse_version(text):
 def is_newer_version(remote_version, local_version):
     try:
         return _parse_version(remote_version) > _parse_version(local_version)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, AttributeError):
         return False
+
+
+def find_release_with_asset(releases, asset_name):
+    """[releases] listesinde (GitHub Releases API'sinin dondugu sirayla, en
+    yeniden eskiye) taslak/on-surum olmayan ve icinde [asset_name] adinda
+    bir dosya olan ilk release'i doner - yoksa None. Bu repoda masaustu ve
+    mobil uygulamalarin release'leri ayni listede karistigi icin gerekli
+    (bkz. UpdateCheckWorker.run)."""
+    for release in releases or []:
+        if release.get("draft") or release.get("prerelease"):
+            continue
+        asset_names = {
+            str(asset.get("name", "")) for asset in release.get("assets", []) or []
+        }
+        if asset_name in asset_names:
+            return release
+    return None
 
 
 class UpdateCheckWorker(QThread):
@@ -844,16 +861,7 @@ class UpdateCheckWorker(QThread):
             self.check_finished.emit(False, str(exc))
             return
 
-        data = None
-        for release in releases or []:
-            if release.get("draft") or release.get("prerelease"):
-                continue
-            asset_names = {
-                str(asset.get("name", "")) for asset in release.get("assets", []) or []
-            }
-            if UPDATE_ASSET_NAME in asset_names:
-                data = release
-                break
+        data = find_release_with_asset(releases, UPDATE_ASSET_NAME)
         if data is None:
             self.check_finished.emit(True, "")  # bu uygulamaya ait release yok
             return

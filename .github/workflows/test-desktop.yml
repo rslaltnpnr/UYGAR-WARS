@@ -1,0 +1,43 @@
+name: Test Desktop App (AI Kedi Asistani)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ai_desktop_assistant/**'
+      - '.github/workflows/test-desktop.yml'
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ai_desktop_assistant
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # PyQt6'nin import sirasinda yukledigi paylasimli kutuphaneler icin -
+      # main.py bir QApplication hic olusturmasa da (testler bunu tetiklemez)
+      # PyQt6.QtWidgets/QtGui'yi import etmek bu sistem kutuphanelerinin
+      # bulunmasini gerektirir.
+      - name: Sistem bagimliliklarini kur
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1
+
+      - name: Bagimliliklari kur
+        run: pip install -r requirements-dev.txt
+
+      - name: Modulu derle (syntax kontrolu)
+        run: python -m py_compile main.py
+
+      - name: Testleri calistir
+        run: pytest -v
