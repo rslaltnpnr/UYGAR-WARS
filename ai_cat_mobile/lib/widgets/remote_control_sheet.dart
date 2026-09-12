@@ -542,6 +542,15 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                   _field(_nameController, 'İsim'),
                   const SizedBox(height: 10),
                   _field(_ipController, 'Bilgisayar IP (örn. 192.168.1.20)'),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, left: 4),
+                    child: Text(
+                      'Aynı Wi-Fi ağında değilseniz: bilgisayara ve telefona '
+                      'Tailscale kurup buraya bilgisayarın Tailscale IP\'sini '
+                      '(100.x.x.x) girin.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 11),
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   _field(
                     _portController,

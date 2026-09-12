@@ -52,6 +52,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   dokununca acilan menuden panelini tamamen acmadan hizlica baska bir
   bilgisayara gecebilir ya da "Bilgisayarları Yönet..." ile tam paneli
   acabilirsiniz.
+  **Ayni Wi-Fi agi disindayken (evden uzakta, mobil veri vb.) erismek
+  icin**: bilgisayara ve telefona [Tailscale](https://tailscale.com)
+  (ucretsiz) kurup ayni hesapla giris yapin, sonra "Bilgisayar IP"
+  alanina bu bilgisayarin normal yerel IP'si yerine Tailscale
+  IP'sini (100.x.x.x) girin - PIN ve sertifika dogrulamasi aynen
+  calismaya devam eder, router ayari gerekmez.
   Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
   sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
   parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere

@@ -2086,6 +2086,11 @@ class CatCharacter(QWidget):
             f"Port: {REMOTE_SERVER_PORT}\n"
             f"PIN: {pin}\n"
             f"{fingerprint_line}"
+            "\nAyni Wi-Fi agindaysaniz yukaridaki IP'yi kullanin. Farkli "
+            "bir agdaysaniz (evden uzaktayken) her iki cihaza da Tailscale "
+            "kurup, buraya bu bilgisayarin Tailscale IP'sini (100.x.x.x, "
+            "Tailscale uygulamasindan gorulebilir) girin - geri kalan her "
+            "sey (PIN, sertifika dogrulamasi) ayni sekilde calisir.\n"
             f"\n{self._recent_connections_text()}"
         )
         regen_button = box.addButton("PIN'i Yenile", QMessageBox.ButtonRole.ActionRole)
