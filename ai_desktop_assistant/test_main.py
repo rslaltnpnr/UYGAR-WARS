@@ -10,10 +10,12 @@ Calistirmak icin:
 """
 
 from main import (
+    HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
     find_release_with_asset,
     is_newer_version,
     is_url_safe_to_open,
+    merge_history_entries,
 )
 
 
@@ -154,3 +156,68 @@ class TestIsUrlSafeToOpen:
 
     def test_cozulemeyen_host_reddedilir(self):
         assert is_url_safe_to_open("http://bu-host-kesinlikle-yok.invalid/x") is False
+
+
+class TestMergeHistoryEntries:
+    def test_yeni_kayitlar_eklenir(self):
+        existing = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1", "is_error": False}
+        ]
+        new = [
+            {"time": "2026-01-01 11:00", "question": "q2", "answer": "a2", "is_error": False}
+        ]
+        added = merge_history_entries(existing, new)
+        assert added == 1
+        assert len(existing) == 2
+        assert existing[1]["question"] == "q2"
+
+    def test_ayni_zaman_soru_cevap_uclusu_tekrar_eklenmez(self):
+        existing = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1", "is_error": False}
+        ]
+        new = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1", "is_error": False}
+        ]
+        added = merge_history_entries(existing, new)
+        assert added == 0
+        assert len(existing) == 1
+
+    def test_ayni_liste_icindeki_tekrarlar_da_bir_kez_eklenir(self):
+        existing = []
+        new = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"},
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"},
+        ]
+        added = merge_history_entries(existing, new)
+        assert added == 1
+        assert len(existing) == 1
+
+    def test_zaman_veya_soru_bos_kayit_atlanir(self):
+        existing = []
+        new = [
+            {"time": "", "question": "q1", "answer": "a1"},
+            {"time": "2026-01-01 10:00", "question": "", "answer": "a1"},
+        ]
+        added = merge_history_entries(existing, new)
+        assert added == 0
+        assert existing == []
+
+    def test_dict_olmayan_kayit_atlanir(self):
+        existing = []
+        added = merge_history_entries(existing, ["gecersiz", 42, None])
+        assert added == 0
+        assert existing == []
+
+    def test_alanlar_maksimum_uzunluga_kesilir(self):
+        existing = []
+        long_text = "x" * (HISTORY_ENTRY_MAX_FIELD_LENGTH + 100)
+        new = [{"time": "2026-01-01 10:00", "question": long_text, "answer": long_text}]
+        merge_history_entries(existing, new)
+        assert len(existing[0]["question"]) == HISTORY_ENTRY_MAX_FIELD_LENGTH
+        assert len(existing[0]["answer"]) == HISTORY_ENTRY_MAX_FIELD_LENGTH
+
+    def test_eksik_is_error_false_varsayilir(self):
+        existing = []
+        new = [{"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"}]
+        merge_history_entries(existing, new)
+        assert existing[0]["is_error"] is False

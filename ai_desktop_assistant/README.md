@@ -23,8 +23,12 @@ karakteri (PyQt6).
   **kilitleme/uyku moduna alma** ve kucultulmus bir **ekran goruntusu**
   isteme de yapabilirsiniz (hepsi Windows'a ozeldir; baska isletim
   sistemlerinde bu komutlar sessizce hicbir sey yapmaz). Telefon
-  uygulamasi ayrica bu bilgisayarin sohbet gecmisini **ice aktarabilir**
-  (sohbet panelindeki bulut simgesi). Bir Gemini hatasi olustugunda bu,
+  uygulamasi ayrica bu bilgisayarla sohbet gecmisini **iki yonlu
+  senkronize edebilir** (sohbet panelindeki senkron simgesi): once
+  telefondaki kayitlari bilgisayara gonderir, sonra bilgisayarin -artik
+  telefonunkilerle birlesmis- tum gecmisini geri ceker; her iki taraf
+  da senkron sonunda tum kayitlarin birlesimine (union) sahip olur, zaten
+  var olan kayitlar tekrar eklenmez. Bir Gemini hatasi olustugunda bu,
   telefonun periyodik olarak yokladigi (poll) bir uyari kuyruguna
   eklenir - telefon uygulamasi acikken bu hatalar icin **yerel bildirim**
   gosterilir (bulut/Firebase gerekmez, sadece ayni Wi-Fi agi).

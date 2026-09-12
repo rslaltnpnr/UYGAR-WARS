@@ -171,7 +171,7 @@ REMOTE_SERVER_PORT = 8765
 REMOTE_MAX_FAILED_ATTEMPTS = 5
 REMOTE_LOCKOUT_SECONDS = 60
 
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
 UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -300,6 +300,40 @@ class ChatHistoryManager:
     def clear(self):
         self.entries = []
         self.save()
+
+
+def merge_history_entries(existing_entries, new_entries):
+    """[new_entries] icindeki (telefondan gelen) kayitlari [existing_entries]
+    listesine yerinde (in-place) ekler; (time, question, answer) ucluesu
+    zaten varsa atlar. Alan uzunluklari HISTORY_ENTRY_MAX_FIELD_LENGTH ile
+    sinirlanir. time ya da question bossa kayit atlanir. Eklenen kayit
+    sayisini dondurur."""
+    existing_keys = {
+        (e.get("time"), e.get("question"), e.get("answer")) for e in existing_entries
+    }
+    added = 0
+    for entry in new_entries:
+        if not isinstance(entry, dict):
+            continue
+        entry_time = str(entry.get("time", ""))[:64]
+        question = str(entry.get("question", ""))[:HISTORY_ENTRY_MAX_FIELD_LENGTH]
+        answer = str(entry.get("answer", ""))[:HISTORY_ENTRY_MAX_FIELD_LENGTH]
+        if not entry_time or not question:
+            continue
+        key = (entry_time, question, answer)
+        if key in existing_keys:
+            continue
+        existing_keys.add(key)
+        existing_entries.append(
+            {
+                "time": entry_time,
+                "question": question,
+                "answer": answer,
+                "is_error": bool(entry.get("is_error", False)),
+            }
+        )
+        added += 1
+    return added
 
 
 # --------------------------------------------------------------------------
@@ -496,6 +530,13 @@ POWER_ACTIONS = ("sleep", "lock")
 CLIPBOARD_ACTIONS = ("push", "pull")
 CLIPBOARD_MAX_LENGTH = 100_000
 
+# Telefondan /history/import ile tek seferde ice aktarilabilecek en fazla
+# kayit sayisi ve soru/cevap basina en fazla karakter (PIN'i ele geciren
+# birinin sohbet gecmisini sisirmesini/asiri bellek kullanimini
+# engellemek icin).
+HISTORY_IMPORT_MAX_ENTRIES = 500
+HISTORY_ENTRY_MAX_FIELD_LENGTH = 20_000
+
 
 def get_clipboard_text():
     try:
@@ -578,6 +619,7 @@ class RemoteCommandServer(QThread):
       POST /power      {"pin", "action"} - kilitler / uyku moduna alir
       POST /screenshot {"pin"}           - kucultulmus bir ekran goruntusu dondurur
       POST /history    {"pin"}               - sohbet gecmisini dondurur (telefona ice aktarmak icin)
+      POST /history/import {"pin", "entries"} - telefondaki yeni kayitlari sohbet gecmisine ekler (iki yonlu senkron)
       POST /alerts     {"pin", "since_id"}   - since_id'den sonraki hata/uyari bildirimlerini dondurur
       POST /clipboard  {"pin", "action", "text"} - "push": panoyu text'e ayarlar, "pull": panoyu dondurur
     Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
@@ -644,6 +686,7 @@ class RemoteCommandServer(QThread):
                     "/power",
                     "/screenshot",
                     "/history",
+                    "/history/import",
                     "/alerts",
                     "/clipboard",
                 ):
@@ -718,6 +761,22 @@ class RemoteCommandServer(QThread):
 
                 if self.path == "/history":
                     self._send_json(200, {"status": "ok", "entries": history.entries})
+                    return
+
+                if self.path == "/history/import":
+                    entries = data.get("entries")
+                    if not isinstance(entries, list):
+                        self._send_json(400, {"error": "gecersiz govde"})
+                        return
+                    if len(entries) > HISTORY_IMPORT_MAX_ENTRIES:
+                        self._send_json(400, {"error": "cok fazla kayit"})
+                        return
+                    added = merge_history_entries(history.entries, entries)
+                    if added:
+                        if len(history.entries) > MAX_HISTORY_ENTRIES:
+                            history.entries = history.entries[-MAX_HISTORY_ENTRIES:]
+                        history.save()
+                    self._send_json(200, {"status": "ok", "added": added})
                     return
 
                 if self.path == "/clipboard":
