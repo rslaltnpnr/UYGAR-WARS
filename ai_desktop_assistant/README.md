@@ -65,7 +65,11 @@ karakteri (PyQt6).
   basarisiz olursa - orn. izin yoksa - uygulama bu ozellik olmadan
   sessizce calismaya devam eder).
 - Sohbet gecmisi `chat_history.json`'da saklanir; sag tik menusundeki
-  "Sohbet Gecmisi" panelinden gorulebilir ve temizlenebilir.
+  "Sohbet Gecmisi" panelinden gorulebilir ve temizlenebilir. Panelde
+  arama kutusuyla soru/cevap icinde filtreleme, her kaydin yanindaki
+  yildiz ile favorileme (ve "★" dugmesiyle sadece favorileri gosterme)
+  ve "Disa Aktar..." ile gorunen kayitlari `.txt` olarak kaydetme de
+  yapilabilir.
 - Cift tiklayinca acilan konusma balonundan soru sorabilirsiniz; kedi
   "dusunme" gorseline gecer, `mss` ile ekran goruntusu alir, Gemini Flash
   modeline (goruntu + soru) gonderir ve yaniti balonda gosterir. Tum bu

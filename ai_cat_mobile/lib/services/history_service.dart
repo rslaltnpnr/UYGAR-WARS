@@ -35,5 +35,15 @@ class HistoryService {
     _prefs.setString(_key, jsonEncode(trimmed.map((e) => e.toJson()).toList()));
   }
 
+  /// [entries] listesinin tamamiyla saklanan gecmisi degistirir (en eski en
+  /// basta olacak sekilde) - favori isaretleme gibi mevcut kayitlari yerinde
+  /// guncelleyen islemler icin, add()'in tersine yeni bir kayit eklemez.
+  void saveAll(List<ChatEntry> entries) {
+    final trimmed = entries.length > maxEntries
+        ? entries.sublist(entries.length - maxEntries)
+        : entries;
+    _prefs.setString(_key, jsonEncode(trimmed.map((e) => e.toJson()).toList()));
+  }
+
   void clear() => _prefs.remove(_key);
 }

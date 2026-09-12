@@ -44,6 +44,7 @@ class _ChatSheetState extends State<ChatSheet> {
   bool _importing = false;
   bool _searchVisible = false;
   String _searchQuery = '';
+  bool _favoritesOnly = false;
 
   @override
   void initState() {
@@ -59,15 +60,33 @@ class _ChatSheetState extends State<ChatSheet> {
   }
 
   List<ChatEntry> get _visibleEntries {
-    if (_searchQuery.isEmpty) return _entries;
-    final query = _searchQuery.toLowerCase();
-    return _entries
-        .where(
-          (e) =>
-              e.question.toLowerCase().contains(query) ||
-              e.answer.toLowerCase().contains(query),
-        )
-        .toList();
+    var result = _entries;
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      result = result
+          .where(
+            (e) =>
+                e.question.toLowerCase().contains(query) ||
+                e.answer.toLowerCase().contains(query),
+          )
+          .toList();
+    }
+    if (_favoritesOnly) {
+      result = result.where((e) => e.isFavorite).toList();
+    }
+    return result;
+  }
+
+  /// [entry] artik listede olmayabilir (ornegin gecmis temizlendiyse) - o
+  /// durumda sessizce hicbir sey yapmaz. Depolamaya kalici (en eski en
+  /// basta) sirayla yazar.
+  void _toggleFavorite(ChatEntry entry) {
+    final index = _entries.indexOf(entry);
+    if (index == -1) return;
+    setState(() {
+      _entries[index] = entry.copyWith(isFavorite: !entry.isFavorite);
+    });
+    widget.history.saveAll(_entries.reversed.toList());
   }
 
   void _toggleSearch() {
@@ -314,6 +333,18 @@ class _ChatSheetState extends State<ChatSheet> {
                     onPressed: _entries.isEmpty ? null : _toggleSearch,
                   ),
                   IconButton(
+                    icon: Icon(
+                      _favoritesOnly ? Icons.star : Icons.star_border,
+                      color: _favoritesOnly
+                          ? colors.accent
+                          : colors.textSecondary,
+                    ),
+                    tooltip: 'Sadece Favoriler',
+                    onPressed: _entries.isEmpty
+                        ? null
+                        : () => setState(() => _favoritesOnly = !_favoritesOnly),
+                  ),
+                  IconButton(
                     icon: _importing
                         ? SizedBox(
                             width: 18,
@@ -386,8 +417,11 @@ class _ChatSheetState extends State<ChatSheet> {
                         controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                         itemCount: _visibleEntries.length,
-                        itemBuilder: (context, index) =>
-                            _EntryTile(entry: _visibleEntries[index]),
+                        itemBuilder: (context, index) => _EntryTile(
+                          entry: _visibleEntries[index],
+                          onToggleFavorite: () =>
+                              _toggleFavorite(_visibleEntries[index]),
+                        ),
                       ),
               ),
               if (_pendingImage != null)
@@ -494,28 +528,50 @@ class _PendingImagePreview extends StatelessWidget {
 
 class _EntryTile extends StatelessWidget {
   final ChatEntry entry;
+  final VoidCallback onToggleFavorite;
 
-  const _EntryTile({required this.entry});
+  const _EntryTile({required this.entry, required this.onToggleFavorite});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Column(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Sen: ${entry.question}',
-            style: TextStyle(color: colors.textSecondary, fontSize: 13),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            '${entry.isError ? "⚠" : "\u{1F431}"} ${entry.answer}',
-            style: TextStyle(
-              color: entry.isError ? colors.error : colors.textPrimary,
-              fontSize: 13,
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Sen: ${entry.question}',
+                    style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${entry.isError ? "⚠" : "\u{1F431}"} ${entry.answer}',
+                    style: TextStyle(
+                      color: entry.isError ? colors.error : colors.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
+          IconButton(
+            icon: Icon(
+              entry.isFavorite ? Icons.star : Icons.star_border,
+              size: 18,
+              color: entry.isFavorite ? colors.accent : colors.textMuted,
+            ),
+            tooltip: 'Favorile',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            onPressed: onToggleFavorite,
           ),
         ],
       ),
