@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/chat_entry.dart';
 import '../services/history_service.dart';
@@ -139,6 +141,25 @@ class _ChatSheetState extends State<ChatSheet> {
   void _clearHistory() {
     widget.history.clear();
     setState(() => _entries = []);
+  }
+
+  /// Gorunen (arama filtresi uygulanmis) kayitlari duz metin dosyasi olarak
+  /// paylasir - masaustundeki "Disa Aktar..." ile ayni format
+  /// (formatHistoryEntriesText, bkz. history_sync.dart).
+  Future<void> _exportHistory() async {
+    final entries = _visibleEntries;
+    if (entries.isEmpty) return;
+    try {
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/sohbet-gecmisi.txt');
+      await file.writeAsString(formatHistoryEntriesText(entries));
+      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Disa aktarilamadi: $exc')),
+      );
+    }
   }
 
   /// Iki yonlu senkronizasyon: once telefondaki tum kayitlari bilgisayara
@@ -308,6 +329,11 @@ class _ChatSheetState extends State<ChatSheet> {
                           ),
                     tooltip: 'Sohbet Geçmişini Senkronize Et',
                     onPressed: _importing ? null : _syncWithDesktop,
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.ios_share, color: colors.textSecondary),
+                    tooltip: 'Disa Aktar',
+                    onPressed: _visibleEntries.isEmpty ? null : _exportHistory,
                   ),
                   IconButton(
                     icon: Icon(

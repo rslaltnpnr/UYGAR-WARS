@@ -13,6 +13,7 @@ from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
     find_release_with_asset,
+    format_history_entries,
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
@@ -221,3 +222,23 @@ class TestMergeHistoryEntries:
         new = [{"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"}]
         merge_history_entries(existing, new)
         assert existing[0]["is_error"] is False
+
+
+class TestFormatHistoryEntries:
+    def test_en_yeni_en_ustte(self):
+        entries = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1"},
+            {"time": "2026-01-01 11:00", "question": "q2", "answer": "a2"},
+        ]
+        text = format_history_entries(entries)
+        assert text.index("q2") < text.index("q1")
+
+    def test_hata_isaretiyle_isaretlenir(self):
+        entries = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "hata!", "is_error": True}
+        ]
+        text = format_history_entries(entries)
+        assert "⚠ hata!" in text
+
+    def test_bos_liste_bos_metin_doner(self):
+        assert format_history_entries([]) == ""

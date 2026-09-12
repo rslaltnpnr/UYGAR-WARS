@@ -403,6 +403,20 @@ def merge_history_entries(existing_entries, new_entries):
     return added
 
 
+def format_history_entries(entries):
+    """[entries] listesini (en yeni en ustte) okunabilir duz metne cevirir -
+    hem ChatHistoryDialog'un ekran gorunumu hem de disa aktarma (.txt)
+    ayni bicimi kullanir."""
+    lines = []
+    for entry in reversed(entries):
+        marker = "⚠" if entry.get("is_error") else "\U0001F431"
+        lines.append(f"[{entry.get('time', '')}]")
+        lines.append(f"Sen: {entry.get('question', '')}")
+        lines.append(f"{marker} {entry.get('answer', '')}")
+        lines.append("")
+    return "\n".join(lines)
+
+
 # --------------------------------------------------------------------------
 # Gorsel yukleme (assets eksikse basit bir yer tutucu cizilir)
 # --------------------------------------------------------------------------
@@ -1461,40 +1475,56 @@ class ChatHistoryDialog(QWidget):
         layout.addWidget(self.text_area, 1)
 
         footer = QHBoxLayout()
+        export_btn = QPushButton("Disa Aktar...")
+        export_btn.clicked.connect(self._on_export)
+        footer.addWidget(export_btn)
         footer.addStretch()
         clear_btn = QPushButton("Gecmisi Temizle")
         clear_btn.clicked.connect(self._on_clear)
         footer.addWidget(clear_btn)
         layout.addLayout(footer)
 
+    def _visible_entries(self):
+        query = self.search_box.text().strip().lower()
+        entries = self.history.entries
+        if not query:
+            return entries
+        return [
+            e
+            for e in entries
+            if query in str(e.get("question", "")).lower()
+            or query in str(e.get("answer", "")).lower()
+        ]
+
     def refresh(self):
         if not self.history.entries:
             self.text_area.setPlainText("Henuz bir sohbet gecmisi yok.")
             return
-        query = self.search_box.text().strip().lower()
-        entries = self.history.entries
-        if query:
-            entries = [
-                e
-                for e in entries
-                if query in str(e.get("question", "")).lower()
-                or query in str(e.get("answer", "")).lower()
-            ]
+        entries = self._visible_entries()
         if not entries:
             self.text_area.setPlainText("Eslesen kayit bulunamadi.")
             return
-        lines = []
-        for entry in reversed(entries):  # en yeni en ustte
-            marker = "⚠" if entry.get("is_error") else "\U0001F431"
-            lines.append(f"[{entry['time']}]")
-            lines.append(f"Sen: {entry['question']}")
-            lines.append(f"{marker} {entry['answer']}")
-            lines.append("")
-        self.text_area.setPlainText("\n".join(lines))
+        self.text_area.setPlainText(format_history_entries(entries))
 
     def _on_clear(self):
         self.history.clear()
         self.refresh()
+
+    def _on_export(self):
+        entries = self._visible_entries()
+        if not entries:
+            QMessageBox.information(self, "Disa Aktar", "Aktarilacak bir kayit yok.")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Sohbet Gecmisini Disa Aktar", "sohbet-gecmisi.txt", "Metin Dosyalari (*.txt)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(format_history_entries(entries))
+        except OSError as exc:
+            QMessageBox.warning(self, "Disa Aktarilamadi", f"Dosya yazilamadi: {exc}")
 
 
 # --------------------------------------------------------------------------
