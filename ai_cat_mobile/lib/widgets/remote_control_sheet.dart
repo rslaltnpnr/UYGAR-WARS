@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
+import '../models/command_macro.dart';
 import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
 import '../services/command_queue_service.dart';
+import '../services/macro_service.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -34,6 +36,20 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     'Google': 'https://google.com',
   };
 
+  /// Makro olusturma dialogunda secilebilen, URL disindaki hazir adimlar -
+  /// anahtar "tur:aksiyon" seklinde, RemoteControlService'in media/power
+  /// endpoint'lerinin bekledigi aksiyon adiyla birebir eslesir.
+  static const _macroStepChoices = <String, String>{
+    'media:play_pause': 'Oynat/Duraklat',
+    'media:prev': 'Önceki',
+    'media:next': 'Sonraki',
+    'media:vol_up': 'Sesi Aç',
+    'media:vol_down': 'Sesi Kıs',
+    'media:mute': 'Sessize Al',
+    'power:lock': 'Kilitle',
+    'power:sleep': 'Uyku Moduna Al',
+  };
+
   late List<RemoteProfile> _profiles;
   String? _activeProfileId;
 
@@ -44,11 +60,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   final _urlController = TextEditingController();
   final _service = RemoteControlService();
   final _queueService = CommandQueueService();
+  final _macroService = MacroService();
 
   bool _busy = false;
   String? _status;
   bool _statusIsError = false;
   int _queuedCount = 0;
+  List<CommandMacro> _macros = [];
 
   @override
   void initState() {
@@ -58,6 +76,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         (_profiles.isNotEmpty ? _profiles.first.id : null);
     _loadActiveProfileIntoFields();
     _refreshQueuedCount();
+    _refreshMacros();
     if (widget.initialUrl != null && widget.initialUrl!.isNotEmpty) {
       _urlController.text = widget.initialUrl!;
     }
@@ -370,6 +389,205 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _refreshMacros() async {
+    final macros = await _macroService.load();
+    if (!mounted) return;
+    setState(() => _macros = macros);
+  }
+
+  String _macroStepLabel(MacroStep step) {
+    if (step.type == 'open_url') return 'Bağlantı Aç: ${step.value}';
+    return _macroStepChoices['${step.type}:${step.value}'] ?? step.value;
+  }
+
+  /// [macro]'nun adimlarini aktif profilde sirayla calistirir ve sonucu
+  /// (kac adim tamamlandi/kuyruklandi/basarisiz oldu) tek bir ozet olarak
+  /// gosterir - calistirma mantiginin kendisi MacroService.run() icinde.
+  Future<void> _runMacro(CommandMacro macro) async {
+    final profile = _activeProfile;
+    if (_busy || profile == null) return;
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    final result = await _macroService.run(
+      macro: macro,
+      profile: profile,
+      sendOpenUrl: _service.openUrl,
+      sendMedia: _service.sendMedia,
+      sendPower: _service.sendPower,
+      onFingerprintUpdate: (fingerprint) =>
+          _updateFingerprintFor(profile.id, fingerprint),
+      enqueueOpenUrl: _queueService.enqueue,
+    );
+    await _refreshQueuedCount();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      final parts = <String>[
+        if (result.succeeded > 0) '${result.succeeded} tamamlandı',
+        if (result.queued > 0) '${result.queued} kuyruğa eklendi',
+        if (result.failed > 0) '${result.failed} başarısız',
+      ];
+      _status = '"${macro.name}" makrosu: ${parts.join(', ')}.';
+      _statusIsError = result.succeeded == 0 && result.queued == 0;
+    });
+  }
+
+  Future<void> _showCreateMacroDialog() async {
+    final colors = context.colors;
+    final nameController = TextEditingController();
+    final urlController = TextEditingController();
+    final steps = <MacroStep>[];
+    String? error;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Yeni Makro'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Makro adı (örn. Çalışma Modu)',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: urlController,
+                          decoration: const InputDecoration(
+                            labelText: 'Açılacak bağlantı (opsiyonel)',
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline),
+                        tooltip: 'Bağlantı adımı ekle',
+                        onPressed: () {
+                          final url = urlController.text.trim();
+                          if (url.isEmpty) return;
+                          setDialogState(() {
+                            steps.add(MacroStep(type: 'open_url', value: url));
+                            urlController.clear();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _macroStepChoices.entries.map((entry) {
+                      final parts = entry.key.split(':');
+                      return ActionChip(
+                        label: Text(entry.value),
+                        onPressed: () => setDialogState(() {
+                          steps.add(MacroStep(type: parts[0], value: parts[1]));
+                        }),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  if (steps.isEmpty)
+                    Text(
+                      'Henüz adım eklenmedi.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    )
+                  else
+                    ...List.generate(
+                      steps.length,
+                      (i) => ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        title: Text('${i + 1}. ${_macroStepLabel(steps[i])}'),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () =>
+                              setDialogState(() => steps.removeAt(i)),
+                        ),
+                      ),
+                    ),
+                  if (error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      error!,
+                      style: TextStyle(color: colors.error, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameController.text.trim().isEmpty) {
+                  setDialogState(() => error = 'Bir isim yaz.');
+                  return;
+                }
+                if (steps.isEmpty) {
+                  setDialogState(() => error = 'En az bir adım ekle.');
+                  return;
+                }
+                Navigator.of(dialogContext).pop(true);
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (saved != true) return;
+    await _macroService.add(
+      CommandMacro(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameController.text.trim(),
+        steps: steps,
+      ),
+    );
+    await _refreshMacros();
+  }
+
+  Future<void> _deleteMacro(CommandMacro macro) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Makroyu Sil'),
+        content: Text('"${macro.name}" makrosu silinsin mi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _macroService.delete(macro.id);
+    await _refreshMacros();
   }
 
   Future<void> _sendMedia(String action) async {
@@ -765,6 +983,63 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                       ],
                     ),
                   ],
+                  Divider(color: colors.divider, height: 32),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Makrolar',
+                        style: TextStyle(color: colors.textMuted, fontSize: 12),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.add_circle_outline,
+                          size: 20,
+                          color: colors.textPrimary,
+                        ),
+                        tooltip: 'Yeni makro',
+                        onPressed: _showCreateMacroDialog,
+                      ),
+                    ],
+                  ),
+                  if (_macros.isEmpty)
+                    Text(
+                      'Birden fazla komutu tek dokunuşla çalıştırmak için bir '
+                      'makro oluşturun (örn. bir bağlantı açıp sesi kısan).',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    )
+                  else
+                    ..._macros.map(
+                      (macro) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: _busy || _activeProfile == null
+                                    ? null
+                                    : () => _runMacro(macro),
+                                icon: const Icon(Icons.play_arrow, size: 18),
+                                label: Text(
+                                  '${macro.name} (${macro.steps.length})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                Icons.delete_outline,
+                                size: 20,
+                                color: colors.textMuted,
+                              ),
+                              tooltip: 'Makroyu sil',
+                              onPressed:
+                                  _busy ? null : () => _deleteMacro(macro),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   Divider(color: colors.divider, height: 32),
                   Text(
                     'Medya Kontrolü',
