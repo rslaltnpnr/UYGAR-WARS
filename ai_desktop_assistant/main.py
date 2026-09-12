@@ -191,7 +191,74 @@ DEFAULT_CONFIG = {
     "remote_pin": None,
     "gemini_request_date": None,
     "gemini_request_count": 0,
+    "theme_mode": "dark",
 }
+
+# Konusma balonu ve gecmis paneli gibi yari-seffaf panellerin renk paleti.
+# Mobil uygulamadaki ThemeMode.light/dark tercihiyle ayni fikirde -
+# "theme_mode" config anahtari yedek alma/geri yukleme ile diger tum
+# ayarlar gibi tasinir, boylece iki uygulamada da tutarli bir tercih
+# saklanir (gercek bir canli senkron degil, ayri ayri saklanan ayni tur
+# tercih).
+THEME_PALETTES = {
+    "dark": {
+        "panel_bg": "rgba(30, 30, 40, 220)",
+        "border": "rgba(255, 255, 255, 60)",
+        "text": "white",
+        "text_muted": "rgba(255, 255, 255, 140)",
+        "input_bg": "rgba(255, 255, 255, 30)",
+        "input_border": "rgba(255, 255, 255, 80)",
+        "textedit_bg": "rgba(255, 255, 255, 15)",
+    },
+    "light": {
+        "panel_bg": "rgba(245, 245, 250, 235)",
+        "border": "rgba(0, 0, 0, 40)",
+        "text": "#202028",
+        "text_muted": "rgba(30, 30, 40, 140)",
+        "input_bg": "rgba(0, 0, 0, 18)",
+        "input_border": "rgba(0, 0, 0, 60)",
+        "textedit_bg": "rgba(0, 0, 0, 10)",
+    },
+}
+
+
+def panel_stylesheet(object_name, theme_mode):
+    """[object_name] nesne adiyla iliskilendirilmis yari-seffaf bir panel
+    (ChatBubble/ChatHistoryDialog) icin, [theme_mode] ("dark"/"light")
+    paletine gore QSS dondurur. Ikisi de neredeyse ayni QSS blogunu
+    kullandigi icin buraya cikarildi."""
+    p = THEME_PALETTES.get(theme_mode, THEME_PALETTES["dark"])
+    return f"""
+        #{object_name} {{
+            background-color: {p['panel_bg']};
+            border-radius: 16px;
+            border: 1px solid {p['border']};
+        }}
+        QLabel {{ color: {p['text']}; }}
+        QLineEdit {{
+            background-color: {p['input_bg']};
+            border: 1px solid {p['input_border']};
+            border-radius: 8px;
+            padding: 6px;
+            color: {p['text']};
+        }}
+        QPushButton {{
+            background-color: rgba(90, 170, 255, 220);
+            border: none;
+            border-radius: 8px;
+            padding: 6px 10px;
+            color: white;
+            font-weight: bold;
+        }}
+        QPushButton:hover {{ background-color: rgba(120, 190, 255, 230); }}
+        QTextEdit {{
+            background-color: {p['textedit_bg']};
+            border: none;
+            border-radius: 8px;
+            color: {p['text']};
+            padding: 6px;
+        }}
+    """
 
 
 # --------------------------------------------------------------------------
@@ -1252,8 +1319,9 @@ class GeminiWorker(QThread):
 class ChatBubble(QWidget):
     ask_requested = pyqtSignal(str)
 
-    def __init__(self, character_name):
+    def __init__(self, character_name, theme_mode="dark"):
         super().__init__()
+        self.theme_mode = theme_mode
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
@@ -1264,42 +1332,11 @@ class ChatBubble(QWidget):
         self._build_ui(character_name)
 
     def _build_ui(self, character_name):
+        palette = THEME_PALETTES.get(self.theme_mode, THEME_PALETTES["dark"])
         container = QWidget(self)
         container.setGeometry(0, 0, self.width(), self.height())
         container.setObjectName("bubble")
-        container.setStyleSheet(
-            """
-            #bubble {
-                background-color: rgba(30, 30, 40, 220);
-                border-radius: 16px;
-                border: 1px solid rgba(255, 255, 255, 60);
-            }
-            QLabel { color: white; }
-            QLineEdit {
-                background-color: rgba(255, 255, 255, 30);
-                border: 1px solid rgba(255, 255, 255, 80);
-                border-radius: 8px;
-                padding: 6px;
-                color: white;
-            }
-            QPushButton {
-                background-color: rgba(90, 170, 255, 220);
-                border: none;
-                border-radius: 8px;
-                padding: 6px 10px;
-                color: white;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: rgba(120, 190, 255, 230); }
-            QTextEdit {
-                background-color: rgba(255, 255, 255, 15);
-                border: none;
-                border-radius: 8px;
-                color: white;
-                padding: 6px;
-            }
-            """
-        )
+        container.setStyleSheet(panel_stylesheet("bubble", self.theme_mode))
 
         layout = QVBoxLayout(container)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -1308,7 +1345,7 @@ class ChatBubble(QWidget):
         title = QPushButton(f"\U0001F431 {character_name}")
         title.setEnabled(False)
         title.setStyleSheet(
-            "background: transparent; color: white; font-weight: bold; "
+            f"background: transparent; color: {palette['text']}; font-weight: bold; "
             "font-size: 13px; text-align: left; border: none; padding: 0;"
         )
         close_btn = QPushButton("✕")
@@ -1340,7 +1377,7 @@ class ChatBubble(QWidget):
         self.request_count_label = QPushButton("")
         self.request_count_label.setEnabled(False)
         self.request_count_label.setStyleSheet(
-            "background: transparent; color: rgba(255,255,255,140); "
+            f"background: transparent; color: {palette['text_muted']}; "
             "font-size: 10px; text-align: left; border: none; padding: 0;"
         )
         layout.addWidget(self.request_count_label)
@@ -1372,9 +1409,10 @@ class ChatBubble(QWidget):
 # --------------------------------------------------------------------------
 
 class ChatHistoryDialog(QWidget):
-    def __init__(self, history: ChatHistoryManager, character_name):
+    def __init__(self, history: ChatHistoryManager, character_name, theme_mode="dark"):
         super().__init__()
         self.history = history
+        self.theme_mode = theme_mode
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
             | Qt.WindowType.WindowStaysOnTopHint
@@ -1386,41 +1424,11 @@ class ChatHistoryDialog(QWidget):
         self.refresh()
 
     def _build_ui(self, character_name):
+        palette = THEME_PALETTES.get(self.theme_mode, THEME_PALETTES["dark"])
         container = QWidget(self)
         container.setGeometry(0, 0, self.width(), self.height())
         container.setObjectName("historyPanel")
-        container.setStyleSheet(
-            """
-            #historyPanel {
-                background-color: rgba(30, 30, 40, 220);
-                border-radius: 16px;
-                border: 1px solid rgba(255, 255, 255, 60);
-            }
-            QPushButton {
-                background-color: rgba(90, 170, 255, 220);
-                border: none;
-                border-radius: 8px;
-                padding: 6px 10px;
-                color: white;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: rgba(120, 190, 255, 230); }
-            QTextEdit {
-                background-color: rgba(255, 255, 255, 15);
-                border: none;
-                border-radius: 8px;
-                color: white;
-                padding: 6px;
-            }
-            QLineEdit {
-                background-color: rgba(255, 255, 255, 20);
-                border: none;
-                border-radius: 8px;
-                color: white;
-                padding: 5px 8px;
-            }
-            """
-        )
+        container.setStyleSheet(panel_stylesheet("historyPanel", self.theme_mode))
 
         layout = QVBoxLayout(container)
         layout.setContentsMargins(14, 12, 14, 12)
@@ -1429,7 +1437,7 @@ class ChatHistoryDialog(QWidget):
         title = QPushButton(f"\U0001F553 {character_name} - Sohbet Gecmisi")
         title.setEnabled(False)
         title.setStyleSheet(
-            "background: transparent; color: white; font-weight: bold; "
+            f"background: transparent; color: {palette['text']}; font-weight: bold; "
             "font-size: 13px; text-align: left; border: none; padding: 0;"
         )
         close_btn = QPushButton("✕")
@@ -1642,7 +1650,9 @@ class CatCharacter(QWidget):
 
     def _open_bubble(self):
         if self.bubble is None:
-            self.bubble = ChatBubble(self.config.get("character_name"))
+            self.bubble = ChatBubble(
+                self.config.get("character_name"), self.config.get("theme_mode")
+            )
             self.bubble.ask_requested.connect(self._handle_question)
             self.bubble.set_request_count(self.config.gemini_request_count_today())
 
@@ -1660,7 +1670,11 @@ class CatCharacter(QWidget):
 
     def _open_history(self):
         if self.history_dialog is None:
-            self.history_dialog = ChatHistoryDialog(self.history, self.config.get("character_name"))
+            self.history_dialog = ChatHistoryDialog(
+                self.history,
+                self.config.get("character_name"),
+                self.config.get("theme_mode"),
+            )
         self.history_dialog.refresh()
 
         panel_x = self.x() + self.width() // 2 - self.history_dialog.width() // 2
@@ -2035,6 +2049,17 @@ class CatCharacter(QWidget):
     def _toggle_autostart(self, checked):
         set_autostart(checked)
 
+    def _toggle_theme(self, checked):
+        self.config.set("theme_mode", "light" if checked else "dark")
+        # Acik konuşma balonu/gecmis panelini kapat - bir sonraki acilista
+        # yeni temayla yeniden olusturulacaklar (bkz. _open_bubble/_open_history).
+        if self.bubble is not None:
+            self.bubble.close()
+            self.bubble = None
+        if self.history_dialog is not None:
+            self.history_dialog.close()
+            self.history_dialog = None
+
     # -- sag tik menusu -----------------------------------------------------
 
     def contextMenuEvent(self, event):
@@ -2098,6 +2123,12 @@ class CatCharacter(QWidget):
         autostart_action.setChecked(is_autostart_enabled())
         autostart_action.toggled.connect(self._toggle_autostart)
         menu.addAction(autostart_action)
+
+        light_theme_action = QAction("Acik Tema", self)
+        light_theme_action.setCheckable(True)
+        light_theme_action.setChecked(self.config.get("theme_mode") == "light")
+        light_theme_action.toggled.connect(self._toggle_theme)
+        menu.addAction(light_theme_action)
 
         update_action = QAction("Guncellemeleri Kontrol Et", self)
         update_action.triggered.connect(lambda: self._check_for_updates(manual=True))
