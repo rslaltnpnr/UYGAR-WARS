@@ -114,9 +114,17 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   void _updateActiveFingerprint(String fingerprint) {
     final current = _activeProfile;
     if (current == null) return;
-    final updated = current.copyWith(certFingerprint: fingerprint);
+    _updateFingerprintFor(current.id, fingerprint);
+  }
+
+  void _updateFingerprintFor(String profileId, String fingerprint) {
     setState(() {
-      _profiles = _profiles.map((p) => p.id == updated.id ? updated : p).toList();
+      _profiles = _profiles
+          .map(
+            (p) =>
+                p.id == profileId ? p.copyWith(certFingerprint: fingerprint) : p,
+          )
+          .toList();
     });
     _persistProfiles();
   }
@@ -264,6 +272,72 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Ayni baglantiyi eslesik TUM bilgisayarlara (yalnizca birine degil)
+  /// sirayla gonderir - orn. hem ev hem is bilgisayarinda ayni muzigi
+  /// baslatmak icin. Her biri kendi basina degerlendirilir: birine
+  /// ulasilamazsa o profil icin komut kuyruga alinir (bkz. _send), digerleri
+  /// yine de denenir - tek bir bilgisayarin ag disinda olmasi digerlerine
+  /// gonderimi engellemez.
+  Future<void> _sendToAllProfiles() async {
+    if (_busy || _profiles.isEmpty) return;
+    final url = _urlController.text.trim();
+    if (url.isEmpty) {
+      setState(() {
+        _status = 'Açılacak bir bağlantı yaz.';
+        _statusIsError = true;
+      });
+      return;
+    }
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+
+    var sentCount = 0;
+    var queuedCount = 0;
+    var failedCount = 0;
+    for (final profile in _profiles) {
+      try {
+        final result = await _service.openUrl(
+          ip: profile.ip,
+          port: profile.port,
+          pin: profile.pin,
+          url: url,
+          pinnedFingerprint: profile.certFingerprint,
+        );
+        _updateFingerprintFor(profile.id, result.fingerprint);
+        sentCount++;
+      } catch (exc) {
+        if (exc is RemoteControlException && exc.isNetworkError) {
+          await _queueService.enqueue(
+            QueuedCommand(
+              profileId: profile.id,
+              url: url,
+              queuedAt: DateTime.now(),
+            ),
+          );
+          queuedCount++;
+        } else {
+          failedCount++;
+        }
+      }
+    }
+
+    await _refreshQueuedCount();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      final parts = <String>[
+        if (sentCount > 0) '$sentCount gönderildi',
+        if (queuedCount > 0) '$queuedCount kuyruğa eklendi',
+        if (failedCount > 0) '$failedCount başarısız',
+      ];
+      _status = '${_profiles.length} bilgisayardan: ${parts.join(', ')}.';
+      _statusIsError = sentCount == 0 && queuedCount == 0;
+    });
   }
 
   Future<void> _refreshQueuedCount() async {
@@ -664,6 +738,14 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                         : const Icon(Icons.send),
                     label: const Text('Bilgisayarda Aç'),
                   ),
+                  if (_profiles.length > 1) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _sendToAllProfiles,
+                      icon: const Icon(Icons.groups_outlined, size: 18),
+                      label: Text('Tüm Bilgisayarlara Gönder (${_profiles.length})'),
+                    ),
+                  ],
                   if (_queuedCount > 0) ...[
                     const SizedBox(height: 8),
                     Row(
