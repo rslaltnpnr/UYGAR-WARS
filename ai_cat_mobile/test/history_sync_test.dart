@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:ai_cat_mobile/models/chat_entry.dart';
 import 'package:ai_cat_mobile/services/history_sync.dart';
 
 void main() {
@@ -65,6 +66,36 @@ void main() {
       final key1 = historySyncKey(time: time, question: 'q1', answer: 'a');
       final key2 = historySyncKey(time: time, question: 'q2', answer: 'a');
       expect(key1, isNot(key2));
+    });
+  });
+
+  group('formatHistoryEntriesText', () {
+    test('verilen sirayla soru/cevap ciftlerini yazar', () {
+      final text = formatHistoryEntriesText([
+        ChatEntry(
+          time: DateTime(2026, 1, 2, 3, 4),
+          question: 'q1',
+          answer: 'a1',
+          isError: false,
+        ),
+      ]);
+      expect(text, '[2026-01-02 03:04]\nSen: q1\n\u{1F431} a1\n');
+    });
+
+    test('hata isaretiyle isaretlenir', () {
+      final text = formatHistoryEntriesText([
+        ChatEntry(
+          time: DateTime(2026, 1, 1),
+          question: 'q',
+          answer: 'hata!',
+          isError: true,
+        ),
+      ]);
+      expect(text, contains('⚠ hata!'));
+    });
+
+    test('bos liste bos metin doner', () {
+      expect(formatHistoryEntriesText([]), '');
     });
   });
 }
