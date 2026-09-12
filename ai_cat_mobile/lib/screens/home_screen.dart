@@ -27,6 +27,7 @@ import '../widgets/remote_control_sheet.dart';
 import '../widgets/roaming_cat.dart';
 import '../widgets/secure_notepad_sheet.dart';
 import '../widgets/settings_dialog.dart';
+import '../widgets/usage_stats_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<ThemeMode> onThemeModeChanged;
@@ -504,6 +505,19 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void _openUsageStats() {
+    _registerActivity();
+    final settings = _settings;
+    final history = _history;
+    if (settings == null || history == null) return;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => UsageStatsSheet(settings: settings, history: history),
+    );
+  }
+
   Future<void> _openReminderDialog() async {
     _registerActivity();
     final minutes = await showDialog<int>(
@@ -647,6 +661,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     tooltip: 'Şifreli Not Defteri',
                     onPressed: _openSecureNotepad,
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 208,
+                  child: IconButton(
+                    icon: Icon(
+                      Icons.bar_chart,
+                      color: context.colors.textMuted,
+                    ),
+                    tooltip: 'Kullanım İstatistikleri',
+                    onPressed: _openUsageStats,
                   ),
                 ),
                 Positioned(

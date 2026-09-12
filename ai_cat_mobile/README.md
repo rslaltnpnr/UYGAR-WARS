@@ -43,6 +43,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   unutursanız notlari kurtarmanin bir yolu yoktur (bu, gercekten sifreli
   olmanin bedelidir); "Şifremi unuttum" secenegi tum notlari silip
   sifirdan yeni bir sifreyle baslamanizi saglar.
+- **Kullanım İstatistikleri** (grafik ikonu): toplam/bugün/bu hafta sorulan
+  soru sayısı, favori ve hatalı yanıt sayısı, bildirim/makro/eşleşik
+  bilgisayar/kuyrukta bekleyen komut sayısı ve ilk soru tarihi gibi
+  özetleri tek bir panelde gösterir - hiçbir yeni veri saklamaz, zaten
+  cihazda duran (sohbet geçmişi, bildirim geçmişi, makrolar, eşleşik
+  bilgisayarlar) verilerden her açılışta yeniden hesaplar.
 - Gemini istekleri: 503 (asiri yuklenme) ve 404 (model kaldirildi)
   durumlarinda masaustu suruumundeki gibi otomatik tekrar deneme ve
   yedek modele (`gemini-3.6-flash`) gecis var.
