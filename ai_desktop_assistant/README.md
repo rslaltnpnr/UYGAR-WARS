@@ -108,6 +108,18 @@ Gemini API anahtarinizi girmeniz yeterli
 `assets/` klasorune kendi gorsellerinizi eklemezseniz uygulama basit bir
 yer tutucu karakterle calismaya devam eder (bkz. `assets/README.md`).
 
+### Testler
+
+Surum karsilastirma, release secimi ve SSRF korumasi gibi saf mantik
+fonksiyonlari icin bir pytest paketi var (`test_main.py`) - GUI
+olusturmaz, `.github/workflows/test-desktop.yml` her `main`'e push'ta
+otomatik calistirir:
+
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
 ## Tek dosya .exe olarak derleme (PyInstaller)
 
 ```bash
