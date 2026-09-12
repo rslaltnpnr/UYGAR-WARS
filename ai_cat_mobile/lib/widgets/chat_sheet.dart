@@ -33,12 +33,15 @@ class ChatSheet extends StatefulWidget {
 
 class _ChatSheetState extends State<ChatSheet> {
   final _controller = TextEditingController();
+  final _searchController = TextEditingController();
   final _picker = ImagePicker();
   final _remoteService = RemoteControlService();
   late List<ChatEntry> _entries;
   XFile? _pendingImage;
   bool _busy = false;
   bool _importing = false;
+  bool _searchVisible = false;
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -49,7 +52,30 @@ class _ChatSheetState extends State<ChatSheet> {
   @override
   void dispose() {
     _controller.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<ChatEntry> get _visibleEntries {
+    if (_searchQuery.isEmpty) return _entries;
+    final query = _searchQuery.toLowerCase();
+    return _entries
+        .where(
+          (e) =>
+              e.question.toLowerCase().contains(query) ||
+              e.answer.toLowerCase().contains(query),
+        )
+        .toList();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searchVisible = !_searchVisible;
+      if (!_searchVisible) {
+        _searchController.clear();
+        _searchQuery = '';
+      }
+    });
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -259,6 +285,14 @@ class _ChatSheetState extends State<ChatSheet> {
                     ),
                   ),
                   IconButton(
+                    icon: Icon(
+                      _searchVisible ? Icons.search_off : Icons.search,
+                      color: colors.textSecondary,
+                    ),
+                    tooltip: 'Gecmiste Ara',
+                    onPressed: _entries.isEmpty ? null : _toggleSearch,
+                  ),
+                  IconButton(
                     icon: _importing
                         ? SizedBox(
                             width: 18,
@@ -289,21 +323,45 @@ class _ChatSheetState extends State<ChatSheet> {
                   ),
                 ],
               ),
+              if (_searchVisible)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    style: TextStyle(color: colors.textPrimary),
+                    decoration: InputDecoration(
+                      hintText: 'Soru veya cevapta ara...',
+                      hintStyle: TextStyle(color: colors.textMuted),
+                      prefixIcon: Icon(
+                        Icons.search,
+                        color: colors.textMuted,
+                        size: 18,
+                      ),
+                      isDense: true,
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (value) =>
+                        setState(() => _searchQuery = value.trim()),
+                  ),
+                ),
               Divider(color: colors.divider, height: 1),
               Expanded(
-                child: _entries.isEmpty
+                child: _visibleEntries.isEmpty
                     ? Center(
                         child: Text(
-                          'Henuz bir sohbet gecmisi yok.',
+                          _entries.isEmpty
+                              ? 'Henuz bir sohbet gecmisi yok.'
+                              : 'Eslesen kayit bulunamadi.',
                           style: TextStyle(color: colors.textMuted),
                         ),
                       )
                     : ListView.builder(
                         controller: scrollController,
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: _entries.length,
+                        itemCount: _visibleEntries.length,
                         itemBuilder: (context, index) =>
-                            _EntryTile(entry: _entries[index]),
+                            _EntryTile(entry: _visibleEntries[index]),
                       ),
               ),
               if (_pendingImage != null)
