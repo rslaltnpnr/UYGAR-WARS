@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ai_cat_mobile/models/remote_profile.dart';
+import 'package:ai_cat_mobile/screens/home_screen.dart';
 import 'package:ai_cat_mobile/services/settings_service.dart';
 import 'package:ai_cat_mobile/theme/app_colors.dart';
 import 'package:ai_cat_mobile/widgets/remote_control_sheet.dart';
@@ -113,5 +114,61 @@ void main() {
       expect(settings.remoteProfiles.length, 1);
       expect(settings.activeProfileId, settings.remoteProfiles.first.id);
     });
+  });
+
+  group('Ana ekran profil gostergesi', () {
+    testWidgets(
+      'gostergeye dokunup menuden secince aktif profil degisir',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final settings = SettingsService(prefs);
+        // ip/pin kasitli olarak bos - _pollForDesktopAlerts bu durumda
+        // hicbir ag istegi yapmadan erken doner, bu yuzden test gercek
+        // bir baglanti denemesi beklemeden hizli ve guvenilir kalir.
+        settings.remoteProfiles = const [
+          RemoteProfile(
+            id: '1',
+            name: 'Ev',
+            ip: '',
+            port: 8765,
+            pin: '',
+            certFingerprint: '',
+          ),
+          RemoteProfile(
+            id: '2',
+            name: 'İş',
+            ip: '',
+            port: 8765,
+            pin: '',
+            certFingerprint: '',
+          ),
+        ];
+        settings.activeProfileId = '1';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: const [AppColors.dark]),
+            home: HomeScreen(onThemeModeChanged: (_) {}),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.text('Ev'), findsOneWidget);
+
+        await tester.tap(find.text('Ev'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('İş'), findsWidgets);
+        await tester.tap(find.text('İş').last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        final reloaded = SettingsService(prefs);
+        expect(reloaded.activeProfileId, '2');
+      },
+    );
   });
 }
