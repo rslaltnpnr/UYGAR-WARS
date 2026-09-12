@@ -15,16 +15,20 @@ from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
     append_access_log,
+    describe_automation_rule,
     find_release_with_asset,
     format_access_log_line,
+    format_automation_rules,
     format_history_entries,
     format_notifications,
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
+    parse_hh_mm,
     prune_old_backups,
     record_connection,
     select_context_turns,
+    should_fire_rule,
     should_run_auto_backup,
     tail_access_log,
 )
@@ -349,6 +353,135 @@ class TestShouldRunAutoBackup:
         last = datetime(2026, 1, 1, 10, 0)
         now = last + timedelta(days=1)
         assert should_run_auto_backup(last.isoformat(), now, interval_days=1) is True
+
+
+class TestParseHhMm:
+    def test_gecerli_saat_normallestirilir(self):
+        assert parse_hh_mm("9:5") == "09:05"
+        assert parse_hh_mm(" 18:30 ") == "18:30"
+        assert parse_hh_mm("00:00") == "00:00"
+        assert parse_hh_mm("23:59") == "23:59"
+
+    def test_iki_parca_degilse_none_doner(self):
+        assert parse_hh_mm("1830") is None
+        assert parse_hh_mm("18:30:00") is None
+
+    def test_sayi_degilse_none_doner(self):
+        assert parse_hh_mm("ab:cd") is None
+
+    def test_aralik_disinda_none_doner(self):
+        assert parse_hh_mm("24:00") is None
+        assert parse_hh_mm("12:60") is None
+        assert parse_hh_mm("-1:00") is None
+
+
+class TestShouldFireRule:
+    def test_devre_disi_kural_hicbir_zaman_ateslenmez(self):
+        rule = {"enabled": False, "trigger_type": "time_daily", "trigger_value": "10:00"}
+        now = datetime(2026, 1, 1, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=0) is False
+
+    def test_gunluk_saat_tutmuyorsa_ateslenmez(self):
+        rule = {"trigger_type": "time_daily", "trigger_value": "10:00"}
+        now = datetime(2026, 1, 1, 9, 59)
+        assert should_fire_rule(rule, now, idle_seconds=0) is False
+
+    def test_gunluk_saat_tutunca_ilk_kez_ateslenir(self):
+        rule = {"trigger_type": "time_daily", "trigger_value": "10:00", "last_fired": None}
+        now = datetime(2026, 1, 1, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=0) is True
+
+    def test_gunluk_kural_bugun_zaten_ateslendiyse_tekrar_ateslenmez(self):
+        rule = {
+            "trigger_type": "time_daily",
+            "trigger_value": "10:00",
+            "last_fired": datetime(2026, 1, 1, 10, 0).isoformat(),
+        }
+        now = datetime(2026, 1, 1, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=0) is False
+
+    def test_gunluk_kural_ertesi_gun_tekrar_ateslenir(self):
+        rule = {
+            "trigger_type": "time_daily",
+            "trigger_value": "10:00",
+            "last_fired": datetime(2026, 1, 1, 10, 0).isoformat(),
+        }
+        now = datetime(2026, 1, 2, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=0) is True
+
+    def test_hareketsizlik_esigi_asilmamissa_ateslenmez(self):
+        rule = {"trigger_type": "idle_minutes", "trigger_value": 30, "last_fired": None}
+        now = datetime(2026, 1, 1, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=29 * 60) is False
+
+    def test_hareketsizlik_esigi_asilinca_ateslenir(self):
+        rule = {"trigger_type": "idle_minutes", "trigger_value": 30, "last_fired": None}
+        now = datetime(2026, 1, 1, 10, 0)
+        assert should_fire_rule(rule, now, idle_seconds=30 * 60) is True
+
+    def test_hareketsizlikte_ayni_pencerede_tekrar_ateslenmez(self):
+        rule = {
+            "trigger_type": "idle_minutes",
+            "trigger_value": 30,
+            "last_fired": datetime(2026, 1, 1, 10, 0).isoformat(),
+        }
+        now = datetime(2026, 1, 1, 10, 20)  # sadece 20 dk sonra, esik 30 dk
+        assert should_fire_rule(rule, now, idle_seconds=50 * 60) is False
+
+    def test_hareketsizlik_esigi_yeniden_asilinca_tekrar_ateslenir(self):
+        rule = {
+            "trigger_type": "idle_minutes",
+            "trigger_value": 30,
+            "last_fired": datetime(2026, 1, 1, 10, 0).isoformat(),
+        }
+        now = datetime(2026, 1, 1, 10, 35)  # 35 dk sonra, esik 30 dk asildi
+        assert should_fire_rule(rule, now, idle_seconds=60 * 60) is True
+
+    def test_bilinmeyen_tetikleyici_turu_false_doner(self):
+        rule = {"trigger_type": "bilinmeyen", "trigger_value": "x"}
+        assert should_fire_rule(rule, datetime(2026, 1, 1), idle_seconds=999999) is False
+
+
+class TestDescribeAndFormatAutomationRules:
+    def test_aktif_kural_ozeti(self):
+        rule = {
+            "name": "Ise gec kalma",
+            "trigger_type": "time_daily",
+            "trigger_value": "18:00",
+            "action_type": "notify",
+            "action_value": "Eve gitme zamani!",
+            "enabled": True,
+        }
+        desc = describe_automation_rule(rule)
+        assert "Ise gec kalma" in desc
+        assert "18:00" in desc
+        assert "Eve gitme zamani!" in desc
+        assert "devre disi" not in desc
+
+    def test_devre_disi_kural_ozetinde_belirtilir(self):
+        rule = {
+            "name": "Test",
+            "trigger_type": "idle_minutes",
+            "trigger_value": 30,
+            "action_type": "lock",
+            "enabled": False,
+        }
+        assert "[devre disi]" in describe_automation_rule(rule)
+
+    def test_format_bos_listede_bos_metin_doner(self):
+        assert format_automation_rules([]) == ""
+
+    def test_format_numaralandirir(self):
+        rules = [
+            {"name": "A", "trigger_type": "time_daily", "trigger_value": "09:00",
+             "action_type": "lock", "enabled": True},
+            {"name": "B", "trigger_type": "idle_minutes", "trigger_value": 5,
+             "action_type": "sleep", "enabled": True},
+        ]
+        text = format_automation_rules(rules)
+        lines = text.split("\n")
+        assert lines[0].startswith("1. ")
+        assert lines[1].startswith("2. ")
 
 
 class TestPruneOldBackups:
