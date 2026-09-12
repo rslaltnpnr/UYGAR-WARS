@@ -896,6 +896,22 @@ def is_url_safe_to_open(url):
     return True
 
 
+def validate_custom_command(name, url):
+    """"Özel Komutlar" menusune eklenmeden once [name]/[url] ciftini
+    dogrular (bkz. CatCharacter._add_custom_command). Sorun yoksa None,
+    varsa kullaniciya aynen gosterilecek bir hata metni dondurur. Ayni
+    is_url_safe_to_open() kontrolu otomasyon kurallarindaki open_url
+    adiminda da kullanilir - buradaki gerekce de aynidir (PIN sizmasa
+    bile yerel ag adreslerine yonlendirme yapilamamasi)."""
+    if not name.strip():
+        return "Bir isim yaz."
+    if not url.strip():
+        return "Bir bağlantı yaz."
+    if not is_url_safe_to_open(url.strip()):
+        return "Bu bağlantı açılamaz (yalnızca genel http(s) adreslerine izin verilir)."
+    return None
+
+
 MEDIA_KEY_NAMES = {
     "play_pause": "play/pause media",
     "next": "next track",
@@ -2542,6 +2558,67 @@ class CatCharacter(QWidget):
         del rules[descriptions.index(choice)]
         self.config.set("automation_rules", rules)
 
+    # -- ozel komutlar (komut genisletme sistemi) ----------------------------
+
+    def _custom_commands(self):
+        """config'teki "custom_commands" listesinin bir kopyasini dondurur
+        (DEFAULT_CONFIG'te bilerek yok - bkz. automation_rules'un yanindaki
+        yorumdaki ayni gerekce: dict(DEFAULT_CONFIG) sig kopyasi, bir liste
+        icin ConfigManager ornekleri arasinda paylasilan degisebilir bir
+        varsayilan olurdu)."""
+        return list(self.config.get("custom_commands") or [])
+
+    def _run_custom_command(self, url):
+        self._register_activity()
+        if is_url_safe_to_open(url):
+            webbrowser.open(url)
+
+    def _add_custom_command(self):
+        """"Özel Komutlar" menusune yeni bir baglanti-acma kisayolu ekler -
+        makrolardan (mobil) ve otomasyon kurallarindan (bkz. yukarida)
+        farkli olarak burada tetikleyici yok, dogrudan menuden tek
+        tiklamayla calistirilir; kod calistirmaz, yalnizca bir URL acar
+        (bkz. validate_custom_command/is_url_safe_to_open)."""
+        self._register_activity()
+        name, ok = QInputDialog.getText(self, "Özel Komut Ekle", "Komut adı:")
+        if not ok:
+            return
+        url, ok = QInputDialog.getText(
+            self, "Özel Komut Ekle", "Açılacak bağlantı (https://...):"
+        )
+        if not ok:
+            return
+        error = validate_custom_command(name, url)
+        if error is not None:
+            QMessageBox.warning(self, "Eklenemedi", error)
+            return
+        commands = self._custom_commands()
+        commands.append(
+            {
+                "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                "name": name.strip(),
+                "url": url.strip(),
+            }
+        )
+        self.config.set("custom_commands", commands)
+        QMessageBox.information(
+            self, "Komut Eklendi", f'"{name.strip()}" komutu eklendi.'
+        )
+
+    def _delete_custom_command(self):
+        self._register_activity()
+        commands = self._custom_commands()
+        if not commands:
+            return
+        names = [c.get("name", "") for c in commands]
+        choice, ok = QInputDialog.getItem(
+            self, "Komut Sil", "Silinecek komut:", names, 0, False
+        )
+        if not ok:
+            return
+        del commands[names.index(choice)]
+        self.config.set("custom_commands", commands)
+
     # -- yedekleme / geri yukleme -------------------------------------------
 
     def _maybe_auto_backup(self):
@@ -2878,6 +2955,28 @@ class CatCharacter(QWidget):
         automation_action = QAction("Otomasyon Kurallari...", self)
         automation_action.triggered.connect(self._show_automation_rules)
         menu.addAction(automation_action)
+
+        custom_commands = self._custom_commands()
+        custom_menu = menu.addMenu("Özel Komutlar")
+        if not custom_commands:
+            empty_action = QAction("(henüz komut yok)", self)
+            empty_action.setEnabled(False)
+            custom_menu.addAction(empty_action)
+        else:
+            for command in custom_commands:
+                command_action = QAction(command.get("name", ""), self)
+                command_action.triggered.connect(
+                    lambda checked, url=command.get("url", ""): self._run_custom_command(url)
+                )
+                custom_menu.addAction(command_action)
+            custom_menu.addSeparator()
+        add_command_action = QAction("Komut Ekle...", self)
+        add_command_action.triggered.connect(self._add_custom_command)
+        custom_menu.addAction(add_command_action)
+        if custom_commands:
+            delete_command_action = QAction("Komut Sil...", self)
+            delete_command_action.triggered.connect(self._delete_custom_command)
+            custom_menu.addAction(delete_command_action)
 
         autostart_action = QAction("Windows ile Baslat", self)
         autostart_action.setCheckable(True)
