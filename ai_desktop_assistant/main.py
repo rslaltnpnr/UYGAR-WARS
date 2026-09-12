@@ -83,8 +83,11 @@ def resource_path(relative_path):
 
 CONFIG_PATH = os.path.join(base_dir(), "config.json")
 HISTORY_PATH = os.path.join(base_dir(), "chat_history.json")
+ACCESS_LOG_PATH = os.path.join(base_dir(), "remote_access.log")
 ASSETS_DIR = resource_path("assets")
 MAX_HISTORY_ENTRIES = 200
+ACCESS_LOG_MAX_BYTES = 512 * 1024
+ACCESS_LOG_DISPLAY_LINES = 50
 
 
 # --------------------------------------------------------------------------
@@ -470,6 +473,44 @@ def prune_old_backups(directory, keep_count):
             os.remove(os.path.join(directory, old_file))
         except OSError:
             pass
+
+
+def format_access_log_line(timestamp_str, client_ip, event, detail=""):
+    """Erisim gunlugune eklenecek tek satirlik, sekme-ayrimli bir kayit
+    uretir. [event] orn. "istek" ya da "gecersiz-pin"; [detail] orn.
+    istenen uc nokta - verilmezse atlanir."""
+    line = f"{timestamp_str}\t{client_ip}\t{event}"
+    if detail:
+        line += f"\t{detail}"
+    return line
+
+
+def append_access_log(path, line, max_bytes=ACCESS_LOG_MAX_BYTES):
+    """[line]'i [path]'in sonuna yeni bir satir olarak ekler. Dosya
+    [max_bytes]'i asarsa, en eski yarisi atilarak basit bir boyut-tabanli
+    donme (rotasyon) yapilir. G/C hatalarinda sessizce vazgecer - erisim
+    gunlugu asla ana islevi (uzaktan kumandayi) bozmamalidir."""
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        if os.path.getsize(path) > max_bytes:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            with open(path, "w", encoding="utf-8") as f:
+                f.writelines(lines[len(lines) // 2 :])
+    except OSError:
+        pass
+
+
+def tail_access_log(path, max_lines=ACCESS_LOG_DISPLAY_LINES):
+    """[path]'teki son [max_lines] satiri (en yeni en altta) dondurur.
+    Dosya yoksa ya da okunamazsa bos liste doner."""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError:
+        return []
+    return [line.rstrip("\n") for line in lines[-max_lines:]]
 
 
 def format_history_entries(entries):
@@ -878,6 +919,15 @@ class RemoteCommandServer(QThread):
                     if record["count"] >= REMOTE_MAX_FAILED_ATTEMPTS:
                         record["blocked_until"] = time.time() + REMOTE_LOCKOUT_SECONDS
                         record["count"] = 0
+                    append_access_log(
+                        ACCESS_LOG_PATH,
+                        format_access_log_line(
+                            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            client_ip,
+                            "gecersiz-pin",
+                            self.path,
+                        ),
+                    )
                     self._send_json(401, {"error": "gecersiz pin"})
                     return
 
@@ -888,6 +938,12 @@ class RemoteCommandServer(QThread):
                     self.path,
                     time.time(),
                     RemoteCommandServer.MAX_RECENT_CONNECTIONS,
+                )
+                append_access_log(
+                    ACCESS_LOG_PATH,
+                    format_access_log_line(
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"), client_ip, "istek", self.path
+                    ),
                 )
 
                 if self.path == "/open":
@@ -1995,6 +2051,24 @@ class CatCharacter(QWidget):
             )
         return "\n".join(lines)
 
+    def _show_access_log(self):
+        self._register_activity()
+        lines = tail_access_log(ACCESS_LOG_PATH)
+        if not lines:
+            text = (
+                "Henuz bir erisim kaydi yok. Telefon uygulamasindan bir "
+                "istek geldiginde burada gorunecek."
+            )
+        else:
+            text = (
+                f"Son {len(lines)} kayit (zaman, IP, olay, uc nokta):\n\n"
+                + "\n".join(lines)
+            )
+        box = QMessageBox(self)
+        box.setWindowTitle("Erisim Gunlugu")
+        box.setText(text)
+        box.exec()
+
     # -- hatirlatici --------------------------------------------------------
 
     def _create_reminder(self):
@@ -2355,6 +2429,10 @@ class CatCharacter(QWidget):
         remote_action = QAction("Uzaktan Kumanda Bilgisi", self)
         remote_action.triggered.connect(self._show_remote_info)
         menu.addAction(remote_action)
+
+        access_log_action = QAction("Erisim Gunlugu", self)
+        access_log_action.triggered.connect(self._show_access_log)
+        menu.addAction(access_log_action)
 
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)

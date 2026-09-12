@@ -14,7 +14,9 @@ from datetime import datetime, timedelta
 from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
+    append_access_log,
     find_release_with_asset,
+    format_access_log_line,
     format_history_entries,
     is_newer_version,
     is_url_safe_to_open,
@@ -22,6 +24,7 @@ from main import (
     prune_old_backups,
     record_connection,
     should_run_auto_backup,
+    tail_access_log,
 )
 
 
@@ -336,3 +339,53 @@ class TestPruneOldBackups:
         remaining = sorted(p.name for p in tmp_path.iterdir())
         assert "baska-dosya.txt" in remaining
         assert len(remaining) == 2  # baska-dosya.txt + tutulan 1 yedek
+
+
+class TestFormatAccessLogLine:
+    def test_detay_olmadan(self):
+        line = format_access_log_line("2026-01-01 10:00:00", "1.2.3.4", "istek")
+        assert line == "2026-01-01 10:00:00\t1.2.3.4\tistek"
+
+    def test_detayla(self):
+        line = format_access_log_line("2026-01-01 10:00:00", "1.2.3.4", "istek", "/open")
+        assert line == "2026-01-01 10:00:00\t1.2.3.4\tistek\t/open"
+
+
+class TestAppendAccessLog:
+    def test_dosya_yoksa_olusturur_ve_yazar(self, tmp_path):
+        path = str(tmp_path / "log.txt")
+        append_access_log(path, "satir1", max_bytes=1_000_000)
+        append_access_log(path, "satir2", max_bytes=1_000_000)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert content == "satir1\nsatir2\n"
+
+    def test_boyut_asilinca_en_eski_yari_atilir(self, tmp_path):
+        path = str(tmp_path / "log.txt")
+        # Her satir yaklasik ayni uzunlukta - dosyayi max_bytes'i asacak
+        # sekilde doldurup rotasyonun tetiklendigini dogruluyoruz.
+        for i in range(20):
+            append_access_log(path, f"satir-{i:03d}", max_bytes=100)
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        assert len(lines) < 20  # eski satirlarin bir kismi atilmis olmali
+        assert lines[-1].strip() == "satir-019"  # en yenisi hep korunur
+
+
+class TestTailAccessLog:
+    def test_dosya_yoksa_bos_liste_doner(self, tmp_path):
+        assert tail_access_log(str(tmp_path / "yok.txt")) == []
+
+    def test_son_n_satiri_dondurur(self, tmp_path):
+        path = str(tmp_path / "log.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            for i in range(10):
+                f.write(f"satir-{i}\n")
+        result = tail_access_log(path, max_lines=3)
+        assert result == ["satir-7", "satir-8", "satir-9"]
+
+    def test_dosya_max_lines_altindaysa_hepsini_doner(self, tmp_path):
+        path = str(tmp_path / "log.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("tek-satir\n")
+        assert tail_access_log(path, max_lines=50) == ["tek-satir"]
