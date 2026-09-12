@@ -17,6 +17,7 @@ from main import (
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
+    record_connection,
 )
 
 
@@ -242,3 +243,36 @@ class TestFormatHistoryEntries:
 
     def test_bos_liste_bos_metin_doner(self):
         assert format_history_entries([]) == ""
+
+
+class TestRecordConnection:
+    def test_yeni_ip_eklenir(self):
+        conns = {}
+        record_connection(conns, "1.2.3.4", "/open", 1000.0, max_connections=5)
+        assert conns["1.2.3.4"]["count"] == 1
+        assert conns["1.2.3.4"]["last_endpoint"] == "/open"
+        assert conns["1.2.3.4"]["last_seen_epoch"] == 1000.0
+
+    def test_ayni_ip_tekrar_gelince_sayac_artar_ve_guncellenir(self):
+        conns = {}
+        record_connection(conns, "1.2.3.4", "/open", 1000.0, max_connections=5)
+        record_connection(conns, "1.2.3.4", "/media", 1010.0, max_connections=5)
+        assert conns["1.2.3.4"]["count"] == 2
+        assert conns["1.2.3.4"]["last_endpoint"] == "/media"
+        assert conns["1.2.3.4"]["last_seen_epoch"] == 1010.0
+
+    def test_kapasite_asilinca_en_eski_ip_cikarilir(self):
+        conns = {}
+        record_connection(conns, "1.1.1.1", "/open", 1000.0, max_connections=2)
+        record_connection(conns, "2.2.2.2", "/open", 2000.0, max_connections=2)
+        record_connection(conns, "3.3.3.3", "/open", 3000.0, max_connections=2)
+        assert "1.1.1.1" not in conns
+        assert set(conns) == {"2.2.2.2", "3.3.3.3"}
+
+    def test_kapasite_doluyken_mevcut_ip_guncellenmesi_baskasini_cikarmaz(self):
+        conns = {}
+        record_connection(conns, "1.1.1.1", "/open", 1000.0, max_connections=2)
+        record_connection(conns, "2.2.2.2", "/open", 2000.0, max_connections=2)
+        record_connection(conns, "1.1.1.1", "/media", 3000.0, max_connections=2)
+        assert set(conns) == {"1.1.1.1", "2.2.2.2"}
+        assert conns["1.1.1.1"]["count"] == 2
