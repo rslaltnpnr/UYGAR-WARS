@@ -1412,6 +1412,13 @@ class ChatHistoryDialog(QWidget):
                 color: white;
                 padding: 6px;
             }
+            QLineEdit {
+                background-color: rgba(255, 255, 255, 20);
+                border: none;
+                border-radius: 8px;
+                color: white;
+                padding: 5px 8px;
+            }
             """
         )
 
@@ -1436,6 +1443,11 @@ class ChatHistoryDialog(QWidget):
         header.addWidget(close_btn)
         layout.addLayout(header)
 
+        self.search_box = QLineEdit()
+        self.search_box.setPlaceholderText("Gecmiste ara...")
+        self.search_box.textChanged.connect(self.refresh)
+        layout.addWidget(self.search_box)
+
         self.text_area = QTextEdit()
         self.text_area.setReadOnly(True)
         layout.addWidget(self.text_area, 1)
@@ -1451,8 +1463,20 @@ class ChatHistoryDialog(QWidget):
         if not self.history.entries:
             self.text_area.setPlainText("Henuz bir sohbet gecmisi yok.")
             return
+        query = self.search_box.text().strip().lower()
+        entries = self.history.entries
+        if query:
+            entries = [
+                e
+                for e in entries
+                if query in str(e.get("question", "")).lower()
+                or query in str(e.get("answer", "")).lower()
+            ]
+        if not entries:
+            self.text_area.setPlainText("Eslesen kayit bulunamadi.")
+            return
         lines = []
-        for entry in reversed(self.history.entries):  # en yeni en ustte
+        for entry in reversed(entries):  # en yeni en ustte
             marker = "⚠" if entry.get("is_error") else "\U0001F431"
             lines.append(f"[{entry['time']}]")
             lines.append(f"Sen: {entry['question']}")
