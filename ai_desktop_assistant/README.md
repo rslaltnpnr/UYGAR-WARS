@@ -131,6 +131,16 @@ karakteri (PyQt6).
   asildiginda (surekli hareketsizlikte tekrar tekrar degil) ateslenir.
   Kurallar her 30 saniyede bir kontrol edilir, uygulama kapatilip
   acilsa da (config.json'da saklandigi icin) kalici kalir.
+- **Özel Komutlar** (komut genişletme sistemi): sag tik menusundeki
+  "Özel Komutlar" alt menusune kendi baglanti-acma kisayollarinizi
+  ekleyebilirsiniz - orn. sik kullandiginiz bir is araciniza tek
+  tiklamayla ulasmak icin. Otomasyon kurallarindan farkli olarak
+  tetikleyicisiz, dogrudan menuden manuel calistirilir; makrolardan
+  (mobil uygulamadaki) farkli olarak tek adimlidir. Bilerek yalnizca
+  bir URL acar - kod calistirmaz, dosya sistemine erismez, komut
+  satirina erismez; eklenen her baglanti otomasyon kurallarindaki
+  ayni SSRF korumasindan (bkz. yukarida) gecer, boylece bu ozellik
+  hicbir yeni saldiri yuzeyi acmaz.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar

@@ -31,6 +31,7 @@ from main import (
     should_fire_rule,
     should_run_auto_backup,
     tail_access_log,
+    validate_custom_command,
 )
 
 
@@ -171,6 +172,27 @@ class TestIsUrlSafeToOpen:
 
     def test_cozulemeyen_host_reddedilir(self):
         assert is_url_safe_to_open("http://bu-host-kesinlikle-yok.invalid/x") is False
+
+
+class TestValidateCustomCommand:
+    def test_gecerli_isim_ve_baglanti_kabul_edilir(self):
+        assert validate_custom_command("Haberler", "http://8.8.8.8/x") is None
+
+    def test_bos_isim_reddedilir(self):
+        assert validate_custom_command("  ", "http://8.8.8.8/x") is not None
+
+    def test_bos_baglanti_reddedilir(self):
+        assert validate_custom_command("Haberler", "  ") is not None
+
+    def test_guvensiz_baglanti_reddedilir(self):
+        error = validate_custom_command("Router", "http://192.168.1.1/x")
+        assert error is not None
+        assert "http(s)" in error.lower() or "http" in error.lower()
+
+    def test_bos_isim_once_kontrol_edilir(self):
+        # Hem isim hem baglanti gecersizse, once isim hatasi donmeli.
+        error = validate_custom_command("", "")
+        assert error == "Bir isim yaz."
 
 
 class TestMergeHistoryEntries:
