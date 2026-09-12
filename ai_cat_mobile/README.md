@@ -70,6 +70,15 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   anlamina geldigi icin (dakikalar sonra gec gelen bir "kilitle"
   komutu sasirtici olurdu) kuyruklanmaz, baglanti yoksa dogrudan
   hata gosterilir.
+  **Coklu-cihaz yayin modu**: 2 veya daha fazla bilgisayar eslendiyse
+  panelde "Tüm Bilgisayarlara Gönder" butonu belirir - ayni baglantiyi
+  tek seferde TUM eslesik bilgisayarlara gonderir (orn. hem evdeki hem
+  isteki bilgisayarda ayni muzigi baslatmak icin). Her bilgisayar kendi
+  basina degerlendirilir: birine ulasilamazsa o bilgisayar icin komut
+  yukaridaki cevrimdisi kuyruga eklenir, digerlerine gonderim yine de
+  denenir - tek bir bilgisayarin kapali/ag disinda olmasi digerlerini
+  etkilemez. Islem sonunda "3 bilgisayardan: 2 gönderildi, 1 kuyruğa
+  eklendi." gibi bir ozet gosterilir.
   Baglanti **HTTPS (TLS)** ile sifrelenir; sunucu kendinden imzali bir
   sertifika kullandigi icin telefon ilk baglantida sertifikanin SHA-256
   parmak izini kaydeder ("ilk baglantida guven" / TOFU - SSH host key'lere

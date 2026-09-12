@@ -171,4 +171,79 @@ void main() {
       },
     );
   });
+
+  group('Çoklu-cihaz yayın modu', () {
+    testWidgets(
+      '2+ profille "Tüm Bilgisayarlara Gönder" butonu görünür ve '
+      'sonucu özetler',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({});
+        final prefs = await SharedPreferences.getInstance();
+        final settings = SettingsService(prefs);
+        // ip/pin kasitli olarak bos - _sendToAllProfiles her profil icin
+        // gercek bir ag istegi denemeden "Once bilgisayarin IP adresini ve
+        // PIN kodunu gir." hatasiyla hemen basarisiz olur, bu yuzden test
+        // gercek baglanti beklemeden hizli ve guvenilir kalir.
+        settings.remoteProfiles = const [
+          RemoteProfile(
+            id: '1',
+            name: 'Ev',
+            ip: '',
+            port: 8765,
+            pin: '',
+            certFingerprint: '',
+          ),
+          RemoteProfile(
+            id: '2',
+            name: 'İş',
+            ip: '',
+            port: 8765,
+            pin: '',
+            certFingerprint: '',
+          ),
+        ];
+        settings.activeProfileId = '1';
+
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(extensions: const [AppColors.dark]),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    builder: (_) => RemoteControlSheet(settings: settings),
+                  ),
+                  child: const Text('Aç'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Aç'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('Tüm Bilgisayarlara Gönder (2)'), findsOneWidget);
+
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Açılacak bağlantı (https://...)'),
+          'https://example.com',
+        );
+        await tester.pump();
+
+        final sendToAllButton =
+            find.text('Tüm Bilgisayarlara Gönder (2)');
+        await tester.ensureVisible(sendToAllButton);
+        await tester.pump();
+        await tester.tap(sendToAllButton);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        expect(find.text('2 bilgisayardan: 2 başarısız.'), findsOneWidget);
+      },
+    );
+  });
 }
