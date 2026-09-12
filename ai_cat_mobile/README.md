@@ -23,7 +23,10 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   once telefondaki kayitlar bilgisayara gonderilir, sonra bilgisayarin
   -artik telefonunkilerle birlesmis- tum gecmisi geri cekilir; her iki
   taraf da senkron sonunda tum kayitlarin birlesimine sahip olur (zaten
-  var olan kayitlar tekrar eklenmez).
+  var olan kayitlar tekrar eklenmez). Panelde ayrica arama (büyüteç
+  ikonu), favorileme (her kaydin yanindaki yildiz, ve sadece favorileri
+  gosteren yildiz filtresi - sadece bu cihazda saklanir, senkron
+  edilmez) ve disa aktarma (paylas ikonu, `.txt` olarak) bulunur.
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
   cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.

@@ -46,13 +46,16 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QLineEdit,
     QMenu,
     QMessageBox,
     QProgressDialog,
     QPushButton,
+    QScrollArea,
     QSystemTrayIcon,
     QTextEdit,
     QVBoxLayout,
@@ -358,6 +361,7 @@ class ChatHistoryManager:
                 "question": question,
                 "answer": answer,
                 "is_error": is_error,
+                "favorite": False,
             }
         )
         if len(self.entries) > MAX_HISTORY_ENTRIES:
@@ -1465,14 +1469,30 @@ class ChatHistoryDialog(QWidget):
         header.addWidget(close_btn)
         layout.addLayout(header)
 
+        search_row = QHBoxLayout()
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Gecmiste ara...")
         self.search_box.textChanged.connect(self.refresh)
-        layout.addWidget(self.search_box)
+        search_row.addWidget(self.search_box, 1)
+        self.favorites_btn = QPushButton("★")
+        self.favorites_btn.setCheckable(True)
+        self.favorites_btn.setFixedSize(30, 30)
+        self.favorites_btn.setToolTip("Sadece favoriler")
+        self.favorites_btn.toggled.connect(self.refresh)
+        search_row.addWidget(self.favorites_btn)
+        layout.addLayout(search_row)
 
-        self.text_area = QTextEdit()
-        self.text_area.setReadOnly(True)
-        layout.addWidget(self.text_area, 1)
+        self.list_area = QScrollArea()
+        self.list_area.setWidgetResizable(True)
+        self.list_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.list_area.setStyleSheet("background: transparent; border: none;")
+        self.list_container = QWidget()
+        self.list_container.setStyleSheet("background: transparent;")
+        self.list_layout = QVBoxLayout(self.list_container)
+        self.list_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_layout.addStretch()
+        self.list_area.setWidget(self.list_container)
+        layout.addWidget(self.list_area, 1)
 
         footer = QHBoxLayout()
         export_btn = QPushButton("Disa Aktar...")
@@ -1487,24 +1507,79 @@ class ChatHistoryDialog(QWidget):
     def _visible_entries(self):
         query = self.search_box.text().strip().lower()
         entries = self.history.entries
-        if not query:
-            return entries
-        return [
-            e
-            for e in entries
-            if query in str(e.get("question", "")).lower()
-            or query in str(e.get("answer", "")).lower()
-        ]
+        if query:
+            entries = [
+                e
+                for e in entries
+                if query in str(e.get("question", "")).lower()
+                or query in str(e.get("answer", "")).lower()
+            ]
+        if self.favorites_btn.isChecked():
+            entries = [e for e in entries if e.get("favorite")]
+        return entries
 
     def refresh(self):
+        while self.list_layout.count() > 1:  # son eleman hep addStretch()
+            item = self.list_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
         if not self.history.entries:
-            self.text_area.setPlainText("Henuz bir sohbet gecmisi yok.")
+            self.list_layout.insertWidget(0, self._make_message_label("Henuz bir sohbet gecmisi yok."))
             return
         entries = self._visible_entries()
         if not entries:
-            self.text_area.setPlainText("Eslesen kayit bulunamadi.")
+            self.list_layout.insertWidget(0, self._make_message_label("Eslesen kayit bulunamadi."))
             return
-        self.text_area.setPlainText(format_history_entries(entries))
+        for i, entry in enumerate(reversed(entries)):  # en yeni en ustte
+            row = self._make_entry_row(entry)
+            self.list_layout.insertWidget(i, row)
+
+    def _make_message_label(self, text):
+        palette = THEME_PALETTES.get(self.theme_mode, THEME_PALETTES["dark"])
+        label = QLabel(text)
+        label.setStyleSheet(f"color: {palette['text_muted']}; border: none; padding: 8px;")
+        return label
+
+    def _make_entry_row(self, entry):
+        palette = THEME_PALETTES.get(self.theme_mode, THEME_PALETTES["dark"])
+        row = QWidget()
+        row_layout = QVBoxLayout(row)
+        row_layout.setContentsMargins(4, 6, 4, 6)
+        row_layout.setSpacing(2)
+
+        header = QHBoxLayout()
+        time_label = QLabel(f"[{entry.get('time', '')}]")
+        time_label.setStyleSheet(f"color: {palette['text_muted']}; font-size: 10px; border: none;")
+        header.addWidget(time_label)
+        header.addStretch()
+        star_btn = QPushButton("★" if entry.get("favorite") else "☆")
+        star_btn.setFixedSize(22, 20)
+        star_btn.setStyleSheet(
+            f"background: transparent; border: none; color: {palette['text']}; font-size: 13px; padding: 0;"
+        )
+        star_btn.clicked.connect(lambda: self._toggle_favorite(entry))
+        header.addWidget(star_btn)
+        row_layout.addLayout(header)
+
+        q_label = QLabel(f"Sen: {entry.get('question', '')}")
+        q_label.setWordWrap(True)
+        q_label.setStyleSheet(f"color: {palette['text_muted']}; font-size: 12px; border: none;")
+        row_layout.addWidget(q_label)
+
+        marker = "⚠" if entry.get("is_error") else "\U0001F431"
+        a_label = QLabel(f"{marker} {entry.get('answer', '')}")
+        a_label.setWordWrap(True)
+        a_label.setStyleSheet(f"color: {palette['text']}; font-size: 12px; border: none;")
+        row_layout.addWidget(a_label)
+
+        return row
+
+    def _toggle_favorite(self, entry):
+        entry["favorite"] = not entry.get("favorite", False)
+        self.history.save()
+        self.refresh()
 
     def _on_clear(self):
         self.history.clear()
