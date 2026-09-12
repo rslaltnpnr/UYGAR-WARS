@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/notification_history_service.dart';
 import '../services/reminder_service.dart';
 import '../theme/app_colors.dart';
 
@@ -55,6 +56,10 @@ class _ReminderDialogState extends State<ReminderDialog> {
     await _service.scheduleReminder(
       delay: Duration(minutes: minutes),
       message: message,
+    );
+    await NotificationHistoryService().add(
+      title: 'Hatırlatıcı Kuruldu',
+      message: '$minutes dakika sonra: $message',
     );
 
     if (!mounted) return;

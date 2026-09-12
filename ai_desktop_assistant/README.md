@@ -64,6 +64,12 @@ karakteri (PyQt6).
   - PIN yanlissa istek reddedilir; ust uste 5 yanlis denemeden sonra o IP
     60 saniye kilitlenir (kaba kuvvet korumasi); PIN karsilastirmasi
     zamanlama yan kanal saldirilarina karsi sabit-zamanlidir.
+- **Bildirim Gecmisi**: sag tik menusundeki ayni adli pencereden,
+  uygulamanin sistem tepsisi araciligiyla gosterdigi tum bildirimlerin
+  (hatirlatici kuruldu/ates aldi, yeni surum mevcut) kalici bir listesini
+  gorebilir, "Temizle" ile sifirlayabilirsiniz - Windows'un kendi Eylem
+  Merkezi'nden farkli olarak bildirim kapatilsa/uygulama yeniden
+  baslatilsa da burada kalir.
 - **Sistem tepsisi**: pencereyi kapatmadan simge durumuna alabilirsiniz;
   tepsi simgesine tiklayinca kedi geri gelir.
 - **Windows ile otomatik baslatma**: sag tik menusundeki "Windows ile
