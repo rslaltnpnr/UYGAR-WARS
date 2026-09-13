@@ -4,7 +4,8 @@
     <string name="widget_action_chat">Sohbet</string>
     <string name="widget_action_remote">Kumanda</string>
     <string name="widget_action_reminder">Hatırlatıcı</string>
-    <string name="widget_description">Seçtiğiniz iki hızlı erişim eylemini (sohbet, kumanda ya da hatırlatıcı) tek dokunuşla açar.</string>
+    <string name="widget_action_notepad">Not Defteri</string>
+    <string name="widget_description">Seçtiğiniz iki hızlı erişim eylemini (sohbet, kumanda, hatırlatıcı ya da not defteri) tek dokunuşla açar.</string>
     <string name="widget_status_unknown">Durum bilinmiyor</string>
     <string name="widget_status_no_profile">Eşleşmiş bilgisayar yok</string>
     <string name="widget_status_connected">%1$s · bağlı</string>

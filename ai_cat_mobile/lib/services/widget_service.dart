@@ -7,7 +7,8 @@ import 'package:home_widget/home_widget.dart';
 enum WidgetLaunchAction {
   chat('chat'),
   remoteControl('remote'),
-  reminder('reminder');
+  reminder('reminder'),
+  secureNotepad('notepad');
 
   const WidgetLaunchAction(this.uriValue);
 
@@ -27,6 +28,7 @@ enum WidgetLaunchAction {
     WidgetLaunchAction.chat => 'Sohbet',
     WidgetLaunchAction.remoteControl => 'Kumanda',
     WidgetLaunchAction.reminder => 'Hatırlatıcı',
+    WidgetLaunchAction.secureNotepad => 'Not Defteri',
   };
 }
 

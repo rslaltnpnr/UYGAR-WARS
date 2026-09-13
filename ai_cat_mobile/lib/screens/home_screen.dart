@@ -162,6 +162,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case WidgetLaunchAction.reminder:
         _openReminderDialog();
         break;
+      case WidgetLaunchAction.secureNotepad:
+        _openSecureNotepad();
+        break;
     }
   }
 
