@@ -46,6 +46,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -1940,6 +1941,16 @@ class GeminiWorker(QThread):
                 time.sleep(retry_delays[attempt])
 
 
+DEFAULT_QUICK_QUESTIONS = [
+    "Ekranimda su an ne var, ozetler misin?",
+    "Bu hata mesaji ne anlama geliyor?",
+    "Bu kod parcasini aciklar misin?",
+    "Burada nasil devam etmeliyim?",
+    "Bunu daha verimli nasil yaparim?",
+    "Bu metni ozetler misin?",
+]
+
+
 # --------------------------------------------------------------------------
 # Konusma balonu
 # --------------------------------------------------------------------------
@@ -1956,7 +1967,7 @@ class ChatBubble(QWidget):
             | Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(320, 220)
+        self.setFixedSize(320, 250)
         self._build_ui(character_name)
 
     def _build_ui(self, character_name):
@@ -1992,6 +2003,14 @@ class ChatBubble(QWidget):
         self.response_area.setPlaceholderText("Bana ekraninda ne oldugunu sor...")
         layout.addWidget(self.response_area, 1)
 
+        self.quick_questions_box = QComboBox()
+        self.quick_questions_box.addItem("Hazir sorular...")
+        self.quick_questions_box.addItems(DEFAULT_QUICK_QUESTIONS)
+        self.quick_questions_box.currentIndexChanged.connect(
+            self._on_quick_question_selected
+        )
+        layout.addWidget(self.quick_questions_box)
+
         input_row = QHBoxLayout()
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Bir soru yaz...")
@@ -2018,6 +2037,13 @@ class ChatBubble(QWidget):
         if not text:
             return
         self.ask_requested.emit(text)
+
+    def _on_quick_question_selected(self, index):
+        if index <= 0:
+            return
+        self.input_field.setText(self.quick_questions_box.itemText(index))
+        self.input_field.setFocus()
+        self.quick_questions_box.setCurrentIndex(0)
 
     def show_thinking(self):
         self.ask_button.setEnabled(False)
