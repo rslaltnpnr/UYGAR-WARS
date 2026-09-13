@@ -90,6 +90,9 @@ def resource_path(relative_path):
 CONFIG_PATH = os.path.join(base_dir(), "config.json")
 HISTORY_PATH = os.path.join(base_dir(), "chat_history.json")
 ACCESS_LOG_PATH = os.path.join(base_dir(), "remote_access.log")
+SCREENSHOT_HISTORY_PATH = os.path.join(base_dir(), "screenshot_history.json")
+MAX_SCREENSHOT_HISTORY_ENTRIES = 50
+
 NOTIFICATION_LOG_PATH = os.path.join(base_dir(), "notifications.json")
 ASSETS_DIR = resource_path("assets")
 MAX_HISTORY_ENTRIES = 200
@@ -466,6 +469,36 @@ class NotificationLog:
     def clear(self):
         self.entries = []
         self.save()
+
+
+class ScreenshotHistoryLog(NotificationLog):
+    """Telefonun /screenshot ile istedigi her ekran goruntusunun ne zaman
+    alindiginin kalici bir kaydi - "Ekran Goruntusu Gecmisi" menu
+    eylemiyle gorulebilir. Gorselin kendisini SAKLAMAZ (bkz.
+    capture_screenshot_jpeg_base64 - goruntu yalnizca istek anlik olarak
+    telefona gonderilir); yalnizca zaman damgasi ve kim istedigi
+    (add()'in source parametresi) tutulur, boylece bu ozellik hicbir yeni
+    gizlilik/depolama riski eklemez."""
+
+    def add(self, source):
+        self.entries.append(
+            {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "source": source,
+            }
+        )
+        if len(self.entries) > MAX_SCREENSHOT_HISTORY_ENTRIES:
+            self.entries = self.entries[-MAX_SCREENSHOT_HISTORY_ENTRIES:]
+        self.save()
+
+
+def format_screenshot_history(entries):
+    """[entries] listesini (en yeni en ustte) okunabilir duz metne
+    cevirir - Ekran Goruntusu Gecmisi penceresinde gosterilir."""
+    lines = []
+    for entry in reversed(entries):
+        lines.append(f"[{entry.get('time', '')}] {entry.get('source', '')}")
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------
@@ -1276,6 +1309,10 @@ class RemoteCommandServer(QThread):
         # bkz. _show_remote_info). Sadece son MAX_RECENT_CONNECTIONS farkli
         # IP tutulur.
         self.recent_connections = {}
+        # CatCharacter.__init__ tarafindan start()'tan once atanir; testler
+        # (ve teorik olarak baska cagiranlar) icin varsayilan None guvenli -
+        # bkz. run()'daki None kontrolu.
+        self.screenshot_history = None
 
     def add_alert(self, message):
         """Ana/GUI thread'inden cagrilir (orn. bir Gemini hatasi olustugunda);
@@ -1294,6 +1331,7 @@ class RemoteCommandServer(QThread):
         history = self.history
         alerts = self.alerts
         recent_connections = self.recent_connections
+        screenshot_history = self.screenshot_history
         open_signal = self.command_received
         media_signal = self.media_command_received
         power_signal = self.power_command_received
@@ -1413,6 +1451,8 @@ class RemoteCommandServer(QThread):
                     except Exception as exc:
                         self._send_json(500, {"error": f"ekran goruntusu alinamadi: {exc}"})
                         return
+                    if screenshot_history is not None:
+                        screenshot_history.add(f"Telefon ({self.client_address[0]})")
                     self._send_json(200, {"status": "ok", "image_base64": image_b64})
                     return
 
@@ -2505,6 +2545,7 @@ class CatCharacter(QWidget):
         self.history = ChatHistoryManager(HISTORY_PATH)
         self.notifications = NotificationLog(NOTIFICATION_LOG_PATH)
         self.secure_notepad_service = SecureNotepadService()
+        self.screenshot_history = ScreenshotHistoryLog(SCREENSHOT_HISTORY_PATH)
         self.history_dialog = None
         self._pending_question = None
 
@@ -2529,6 +2570,7 @@ class CatCharacter(QWidget):
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
 
         self.remote_server = RemoteCommandServer(self.config, self.history, self)
+        self.remote_server.screenshot_history = self.screenshot_history
         self.remote_server.command_received.connect(self._on_remote_command)
         self.remote_server.media_command_received.connect(self._on_media_command)
         self.remote_server.power_command_received.connect(self._on_power_command)
@@ -2867,6 +2909,21 @@ class CatCharacter(QWidget):
         box.exec()
         if box.clickedButton() == clear_button:
             self.notifications.clear()
+
+    def _show_screenshot_history(self):
+        self._register_activity()
+        if not self.screenshot_history.entries:
+            text = "Henuz alinan bir ekran goruntusu yok."
+        else:
+            text = format_screenshot_history(self.screenshot_history.entries)
+        box = QMessageBox(self)
+        box.setWindowTitle("Ekran Goruntusu Gecmisi")
+        box.setText(text)
+        clear_button = box.addButton("Temizle", QMessageBox.ButtonRole.ActionRole)
+        box.addButton(QMessageBox.StandardButton.Close)
+        box.exec()
+        if box.clickedButton() == clear_button:
+            self.screenshot_history.clear()
 
     def _show_usage_stats(self):
         self._register_activity()
@@ -3496,6 +3553,10 @@ class CatCharacter(QWidget):
         notification_history_action = QAction("Bildirim Gecmisi", self)
         notification_history_action.triggered.connect(self._show_notification_history)
         menu.addAction(notification_history_action)
+
+        screenshot_history_action = QAction("Ekran Goruntusu Gecmisi", self)
+        screenshot_history_action.triggered.connect(self._show_screenshot_history)
+        menu.addAction(screenshot_history_action)
 
         usage_stats_action = QAction("Kullanım İstatistikleri", self)
         usage_stats_action.triggered.connect(self._show_usage_stats)
