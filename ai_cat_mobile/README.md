@@ -45,6 +45,12 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   sifirdan yeni bir sifreyle baslamanizi saglar. Her nota virgulle
   ayrilmis etiketler ("iş, önemli" gibi) eklenebilir; not listesinin
   ustundeki etiket cipleriyle tek bir etikete gore filtrelenebilir.
+- **Uygulama Kilidi** (ayarlar penceresinde): acilista ve uygulama arka
+  plana gidip geri donduğunde 4-6 haneli bir PIN sorar - telefonu eline
+  alan biri kilidi bilmeden sohbet/kumanda panellerini goremez. Bu,
+  Şifreli Not Defteri'nin sifrelemesinden farklidir: veri sifrelenmez,
+  yalnizca acilis ekrani PIN arkasina gizlenir (hizli goz atmaya karsi
+  bir engel, fiziksel cihaz erisimine karsi degil).
 - **Kullanım İstatistikleri** (grafik ikonu): toplam/bugün/bu hafta sorulan
   soru sayısı, favori ve hatalı yanıt sayısı, bildirim/makro/eşleşik
   bilgisayar/kuyrukta bekleyen komut sayısı ve ilk soru tarihi gibi

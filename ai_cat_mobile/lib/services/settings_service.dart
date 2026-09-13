@@ -29,6 +29,8 @@ class SettingsService {
   static const _keyAutoBackupLast = 'auto_backup_last';
   static const _keyWidgetSlot1Action = 'widget_slot1_action';
   static const _keyWidgetSlot2Action = 'widget_slot2_action';
+  static const _keyAppLockEnabled = 'app_lock_enabled';
+  static const _keyAppLockPin = 'app_lock_pin';
 
   final SharedPreferences _prefs;
 
@@ -146,4 +148,24 @@ class SettingsService {
       WidgetLaunchAction.remoteControl;
   set widgetSlot2Action(WidgetLaunchAction action) =>
       _prefs.setString(_keyWidgetSlot2Action, action.uriValue);
+
+  /// Uygulama acilisinda (ve arka plandan donuste) bir PIN isteyip
+  /// istemeyecegi - bkz. AppLockScreen/main.dart'taki _AppLockGate. Bu,
+  /// Şifreli Not Defteri'nin AES-256-GCM sifrelemesinden FARKLI bir seydir:
+  /// burada veri sifrelenmez, yalnizca uygulamanin acilis ekrani bir PIN
+  /// arkasina gizlenir (telefonu eline alan biri kilidi bilmeden sohbet/
+  /// kumanda panellerini goremez) - PIN de diger ayarlar gibi duz metin
+  /// saklanir (bkz. sinif dokumani), bu yuzden fiziksel cihaz erisimine
+  /// karsi degil, hizli goz atmaya karsi bir engeldir.
+  bool get appLockEnabled => _prefs.getBool(_keyAppLockEnabled) ?? false;
+  set appLockEnabled(bool value) => _prefs.setBool(_keyAppLockEnabled, value);
+
+  String? get appLockPin => _prefs.getString(_keyAppLockPin);
+  set appLockPin(String? value) {
+    if (value == null) {
+      _prefs.remove(_keyAppLockPin);
+    } else {
+      _prefs.setString(_keyAppLockPin, value);
+    }
+  }
 }
