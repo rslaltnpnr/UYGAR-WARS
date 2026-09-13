@@ -4,14 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_strings.dart';
+import 'overlay/screen_watch_overlay_app.dart';
 import 'screens/app_lock_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/auto_theme.dart';
+import 'services/screen_watch_overlay_service.dart';
 import 'services/settings_service.dart';
 import 'theme/app_colors.dart';
 
 void main() {
   runApp(const AiCatApp());
+}
+
+/// "Ekranda Gez" kayan balonu icin ayri giris noktasi - main() ile AYNI
+/// process ama TAMAMEN farkli bir Flutter motoru/isolate'ta calisir
+/// (flutter_overlay_window paketi bunu bir on plan servisinden baslatir).
+/// @pragma olmadan derleyici "kullanilmiyor" diye bu fonksiyonu budar;
+/// native taraf ismiyle (overlayMain) cagirdigi icin Dart kodundan hic
+/// cagirilmasa bile kalmasi gerekir.
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const ScreenWatchOverlayApp());
 }
 
 class AiCatApp extends StatefulWidget {
@@ -54,6 +68,24 @@ class _AiCatAppState extends State<AiCatApp> {
       const Duration(minutes: 1),
       (_) => _applyAutoThemeIfEnabled(),
     );
+    _restoreScreenWatchOverlayIfEnabled(settings);
+  }
+
+  /// Kullanici daha once "Ekranda Gez"i actiysa (ve izin hala gecerliyse)
+  /// balonu otomatik yeniden gosterir - uygulama surecinin oldurulup
+  /// yeniden baslatilmasi (telefonu yeniden baslatma, "Son Uygulamalar"
+  /// listesinden kapatma) balonu da beraberinde oldurur, bu olmadan
+  /// kullanici her seferinde ayarlara girip yeniden acmak zorunda kalirdi.
+  Future<void> _restoreScreenWatchOverlayIfEnabled(
+    SettingsService settings,
+  ) async {
+    if (!settings.screenWatchOverlayEnabled) return;
+    final overlay = ScreenWatchOverlayService();
+    if (!await overlay.isPermissionGranted()) return;
+    if (await overlay.isActive()) return;
+    final dpr = WidgetsBinding.instance.platformDispatcher.views.first
+        .devicePixelRatio;
+    await overlay.showBubble(devicePixelRatio: dpr);
   }
 
   void _applyAutoThemeIfEnabled() {

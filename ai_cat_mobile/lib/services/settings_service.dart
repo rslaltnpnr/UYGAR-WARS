@@ -38,6 +38,7 @@ class SettingsService {
   static const _keyNotificationVibrationPattern =
       'notification_vibration_pattern';
   static const _keyLanguageCode = 'language_code';
+  static const _keyScreenWatchOverlayEnabled = 'screen_watch_overlay_enabled';
 
   final SharedPreferences _prefs;
 
@@ -208,4 +209,13 @@ class SettingsService {
   /// kullanilir, degilse Turkce'ye duser.
   String get languageCode => _prefs.getString(_keyLanguageCode) ?? 'system';
   set languageCode(String value) => _prefs.setString(_keyLanguageCode, value);
+
+  /// "Ekranda Gez" kayan balonu acik mi - bkz. ScreenWatchOverlayService.
+  /// Uygulama yeniden acildiginda (orn. islem oldurulup yeniden
+  /// baslatildiginda) bu true ise ve izin hala verilmisse balon otomatik
+  /// yeniden gosterilir (bkz. main.dart _loadSettings).
+  bool get screenWatchOverlayEnabled =>
+      _prefs.getBool(_keyScreenWatchOverlayEnabled) ?? false;
+  set screenWatchOverlayEnabled(bool value) =>
+      _prefs.setBool(_keyScreenWatchOverlayEnabled, value);
 }
