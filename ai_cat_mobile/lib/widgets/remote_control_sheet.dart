@@ -5,7 +5,9 @@ import '../models/command_macro.dart';
 import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
 import '../screens/automation_rules_screen.dart';
+import '../screens/command_history_screen.dart';
 import '../screens/qr_pairing_scanner_screen.dart';
+import '../services/command_history_service.dart';
 import '../services/command_queue_service.dart';
 import '../services/macro_service.dart';
 import '../services/pairing_uri.dart';
@@ -64,6 +66,7 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
   final _service = RemoteControlService();
   final _queueService = CommandQueueService();
   final _macroService = MacroService();
+  final _commandHistory = CommandHistoryService();
 
   bool _busy = false;
   String? _status;
@@ -317,6 +320,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         pinnedFingerprint: profile.certFingerprint,
       );
       _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Bağlantı Aç',
+        detail: _urlController.text.trim(),
+        profileName: profile.name,
+      );
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi! Bilgisayarda açılması lazım.';
@@ -663,6 +671,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
       _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Medya',
+        detail: action,
+        profileName: _activeProfile?.name ?? '',
+      );
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi.';
@@ -714,6 +727,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
       _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Güç',
+        detail: label,
+        profileName: _activeProfile?.name ?? '',
+      );
       if (!mounted) return;
       setState(() {
         _status = 'Gönderildi.';
@@ -745,6 +763,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
       _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Ekran Görüntüsü',
+        detail: '',
+        profileName: _activeProfile?.name ?? '',
+      );
       if (!mounted) return;
       setState(() => _busy = false);
       showDialog(
@@ -807,6 +830,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
         pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
       );
       _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Pano Gönder',
+        detail: text.length > 40 ? '${text.substring(0, 40)}…' : text,
+        profileName: _activeProfile?.name ?? '',
+      );
       if (!mounted) return;
       setState(() {
         _status = 'Pano bilgisayara gönderildi.';
@@ -1189,6 +1217,16 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                         _busy || _activeProfile == null ? null : _openAutomationRules,
                     icon: const Icon(Icons.rule),
                     label: const Text('Otomasyon Kuralları'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const CommandHistoryScreen(),
+                      ),
+                    ),
+                    icon: const Icon(Icons.history),
+                    label: const Text('Uzaktan Komut Geçmişi'),
                   ),
                   Divider(color: colors.divider, height: 32),
                   Text(

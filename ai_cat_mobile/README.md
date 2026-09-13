@@ -80,7 +80,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   Port/PIN alanlarindaki "QR ile Ekle" ile o penceredeki QR kodu
   kamerayla tarayip ayni bilgileri elle yazmadan doldurabilirsiniz.
   YouTube, YouTube Music, Spotify ve Google icin hazir baglanti
-  butonlari da var. "Otomasyon Kuralları" butonu, bilgisayarda tanimli
+  butonlari da var. "Uzaktan Komut Geçmişi" butonu, telefondan
+  bilgisayara gonderilen her komutun (baglanti acma, medya kontrolu,
+  guc eylemi, ekran goruntusu, pano gonderimi) zaman damgali bir
+  gecmisini gosterir - salt-okunur bir denetim izidir, komutlari
+  yeniden calistirmaz. "Otomasyon Kuralları" butonu, bilgisayarda tanimli
   otomasyon kurallarini (masaustu uygulamasindaki "Otomasyon Kurallari"
   penceresiyle ayni kurallar) salt-okunur olarak listeler - kurallar
   yalnizca masaustunde olusturulup duzenlenebilir, telefon yalnizca
