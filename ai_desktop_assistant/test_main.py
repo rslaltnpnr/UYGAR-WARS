@@ -11,8 +11,12 @@ Calistirmak icin:
 
 from datetime import datetime, timedelta
 
+import pytest
+
 from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
+    SecureNotepadService,
+    WrongPasswordError,
     _parse_version,
     append_access_log,
     build_pairing_uri,
@@ -619,6 +623,76 @@ class TestDescribeAndFormatAutomationRules:
         lines = text.split("\n")
         assert lines[0].startswith("1. ")
         assert lines[1].startswith("2. ")
+
+
+class TestSecureNotepadService:
+    """Dusuk bir PBKDF2 iterasyon sayisiyla calisir - varsayilan 200k
+    iterasyon test suitini gereksiz yavaslatir, ayni kod yolunu daha
+    hizli sinamak icin."""
+
+    def _service(self, tmp_path):
+        return SecureNotepadService(
+            path=str(tmp_path / "secure_notepad.dat"), pbkdf2_iterations=100
+        )
+
+    def test_kurulmadan_once_is_set_up_false(self, tmp_path):
+        assert self._service(tmp_path).is_set_up() is False
+
+    def test_set_up_sonrasi_is_set_up_true(self, tmp_path):
+        service = self._service(tmp_path)
+        service.set_up("dogru-sifre")
+        assert service.is_set_up() is True
+
+    def test_set_up_sonrasi_dogru_sifreyle_bos_liste_acilir(self, tmp_path):
+        service = self._service(tmp_path)
+        service.set_up("dogru-sifre")
+        _, notes = service.unlock("dogru-sifre")
+        assert notes == []
+
+    def test_yanlis_sifre_wrongpassworderror_firlatir(self, tmp_path):
+        service = self._service(tmp_path)
+        service.set_up("dogru-sifre")
+        with pytest.raises(WrongPasswordError):
+            service.unlock("yanlis-sifre")
+
+    def test_save_edilen_notlar_dogru_sifreyle_geri_yuklenir(self, tmp_path):
+        service = self._service(tmp_path)
+        key = service.set_up("dogru-sifre")
+        notes = [{"id": "1", "title": "Banka PIN", "body": "gizli", "updated_at": "x"}]
+        service.save(key, notes)
+
+        _, loaded = service.unlock("dogru-sifre")
+        assert loaded == notes
+
+    def test_kaydedilen_dosyada_duz_metin_gorunmez(self, tmp_path):
+        service = self._service(tmp_path)
+        key = service.set_up("dogru-sifre")
+        service.save(key, [{"id": "1", "title": "gizli-baslik-xyz", "body": "gizli-govde-abc", "updated_at": "x"}])
+
+        raw = (tmp_path / "secure_notepad.dat").read_text()
+        assert "gizli-baslik-xyz" not in raw
+        assert "gizli-govde-abc" not in raw
+
+    def test_reset_sonrasi_yeniden_kurulabilir(self, tmp_path):
+        service = self._service(tmp_path)
+        service.set_up("eski-sifre")
+        service.reset()
+        assert service.is_set_up() is False
+
+        service.set_up("yeni-sifre")
+        _, notes = service.unlock("yeni-sifre")
+        assert notes == []
+
+    def test_ardisik_save_farkli_sifreli_metin_uretir(self, tmp_path):
+        service = self._service(tmp_path)
+        key = service.set_up("dogru-sifre")
+        path = tmp_path / "secure_notepad.dat"
+
+        service.save(key, [])
+        first = path.read_text()
+        service.save(key, [])
+        second = path.read_text()
+        assert first != second
 
 
 class TestPruneOldBackups:

@@ -152,6 +152,16 @@ karakteri (PyQt6).
   "Kullanım İstatistikleri" panelinin masaüstü karşılığı, hiçbir yeni
   veri saklamaz, zaten cihazda duran verilerden her açılışta yeniden
   hesaplar.
+- **Şifreli Not Defteri**: sag tik menusunden, kendi belirlediginiz bir
+  sifreyle korunan, yalnizca bu bilgisayarda (`secure_notepad.dat`
+  dosyasinda, `config.json`'dan ayri) saklanan bir not listesi acabilirsiniz -
+  mobil uygulamadaki ayni ozelligin masaustu karsiligi. Notlar
+  AES-256-GCM ile sifrelenir; anahtar sifrenizden PBKDF2-HMAC-SHA256 ile
+  turetilir ve hicbir yerde saklanmaz - pencereyi kapatip yeniden
+  actiginizda tekrar sifre ister. Sifrenizi unutursaniz notlari
+  kurtarmanin bir yolu yoktur (bu, gercekten sifreli olmanin bedelidir);
+  "Şifremi unuttum" secenegi tum notlari silip sifirdan yeni bir
+  sifreyle baslamanizi saglar.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar

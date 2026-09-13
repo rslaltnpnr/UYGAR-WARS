@@ -14,6 +14,7 @@ Dosyanin en altinda PyInstaller ile tek dosya (.exe) yapma adimlari
 yer alir.
 """
 
+import base64
 import hmac
 import http.server
 import ipaddress
@@ -52,11 +53,14 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMenu,
     QMessageBox,
     QProgressDialog,
     QPushButton,
     QScrollArea,
+    QStackedWidget,
     QSystemTrayIcon,
     QTextEdit,
     QVBoxLayout,
@@ -461,6 +465,120 @@ class NotificationLog:
     def clear(self):
         self.entries = []
         self.save()
+
+
+# --------------------------------------------------------------------------
+# Sifreli not defteri (secure_notepad.dat)
+# --------------------------------------------------------------------------
+
+SECURE_NOTEPAD_PATH = os.path.join(base_dir(), "secure_notepad.dat")
+# Mobil suruumundeki SecureNotepadService ile ayni gerekce: OWASP
+# PBKDF2-HMAC-SHA256 onerisi 600k+ ama bu, yerel hizlandirma olmadan
+# kilit acmayi rahatsiz edici derecede yavaslatabilir; 200k, kaba
+# kuvveti pahali kilarken yine de makul bir sure icinde kalir.
+SECURE_NOTEPAD_PBKDF2_ITERATIONS = 200000
+
+
+class WrongPasswordError(Exception):
+    """unlock()'a girilen sifre, saklanan tuzla turetilen anahtarla
+    eslesmedigini (AES-GCM'in kimlik dogrulama etiketi tutmadigini)
+    belirtir."""
+
+
+class SecureNotepadService:
+    """Notlari, kullanicinin belirledigi bir sifreden PBKDF2-HMAC-SHA256
+    ile turetilen bir anahtarla AES-256-GCM ile sifreleyip cihazda
+    (config.json'dan ayri, secure_notepad.dat dosyasinda) saklayan
+    servis - mobil suruumundeki SecureNotepadService ile ayni tasarim.
+    Butun not listesi TEK bir sifreli blok olarak tutulur.
+
+    Sifre hicbir zaman diskte saklanmaz; her kilit acmada saklanan
+    tuzdan yeniden turetilir ve dogrulugu AES-GCM'in kendi kimlik
+    dogrulama etiketiyle sinanir - decrypt yanlis anahtarda
+    cryptography.exceptions.InvalidTag firlatir, bu WrongPasswordError'a
+    cevrilir. Sifre unutulursa notlar KURTARILAMAZ - bkz. reset()."""
+
+    def __init__(self, path=SECURE_NOTEPAD_PATH, pbkdf2_iterations=SECURE_NOTEPAD_PBKDF2_ITERATIONS):
+        self.path = path
+        self.pbkdf2_iterations = pbkdf2_iterations
+
+    def is_set_up(self):
+        return os.path.exists(self.path)
+
+    def _derive_key(self, password, salt):
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=self.pbkdf2_iterations,
+        )
+        return kdf.derive(password.encode("utf-8"))
+
+    def set_up(self, password):
+        """Ilk kurulum: yeni bir tuz uretir, [password]'dan bir anahtar
+        turetir ve bos bir not listesini sifreleyip kaydeder. Dondurulen
+        anahtar, oturum boyunca save() cagrilarinda sifreyi tekrar
+        girmeden kullanilabilir."""
+        salt = os.urandom(16)
+        key = self._derive_key(password, salt)
+        self._write_notes(salt, key, [])
+        return key
+
+    def unlock(self, password):
+        """[password] dogruysa (anahtar, salt) cifti ile notlari
+        dondurur; yanlissa WrongPasswordError firlatir. Defter henuz
+        kurulmadiysa (bkz. is_set_up()) FileNotFoundError firlatir."""
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        with open(self.path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        salt = base64.b64decode(data["salt"])
+        key = self._derive_key(password, salt)
+        nonce_and_ciphertext = base64.b64decode(data["blob"])
+        nonce, ciphertext = nonce_and_ciphertext[:12], nonce_and_ciphertext[12:]
+        try:
+            plaintext = AESGCM(key).decrypt(nonce, ciphertext, None)
+        except InvalidTag:
+            raise WrongPasswordError() from None
+        notes = json.loads(plaintext.decode("utf-8"))
+        return key, notes
+
+    def save(self, key, notes):
+        """[notes]'u onceden turetilmis [key] ile yeniden sifreleyip
+        kaydeder - her cagrida YENI bir rastgele nonce kullanilir
+        (AES-GCM'de ayni anahtarla nonce tekrari kritik bir guvenlik
+        zafiyetidir)."""
+        with open(self.path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        salt = base64.b64decode(data["salt"])
+        self._write_notes(salt, key, notes)
+
+    def _write_notes(self, salt, key, notes):
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+        nonce = os.urandom(12)
+        plaintext = json.dumps(notes, ensure_ascii=False).encode("utf-8")
+        ciphertext = AESGCM(key).encrypt(nonce, plaintext, None)
+        data = {
+            "salt": base64.b64encode(salt).decode("ascii"),
+            "blob": base64.b64encode(nonce + ciphertext).decode("ascii"),
+        }
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def reset(self):
+        """Not defterini ve tum notlari kalici olarak siler. Sifre
+        unutulduysa tek secenek budur: anahtar yalnizca sifreden
+        turetilir ve hicbir yerde saklanmaz, bu yuzden "sifremi
+        unuttum" akisi kriptografik olarak imkansizdir."""
+        try:
+            os.remove(self.path)
+        except OSError:
+            pass
 
 
 def format_notifications(entries):
@@ -2094,6 +2212,240 @@ class ChatHistoryDialog(QWidget):
             QMessageBox.warning(self, "Disa Aktarilamadi", f"Dosya yazilamadi: {exc}")
 
 
+class SecureNotepadDialog(QDialog):
+    """Sifreli not defteri penceresi - kullanicinin belirledigi bir
+    sifreyle korunan, yalnizca bu bilgisayarda saklanan bir not listesi
+    (bkz. SecureNotepadService; mobil suruumundeki SecureNotepadSheet
+    ile ayni tasarim). Uc sayfa arasinda (kurulum/kilitli/acik) bir
+    QStackedWidget ile gecis yapar; turetilen anahtar yalnizca bu
+    pencere acikken bellekte tutulur."""
+
+    def __init__(self, service, parent=None):
+        super().__init__(parent)
+        self.service = service
+        self.key = None
+        self.notes = []
+
+        self.setWindowTitle("Şifreli Not Defteri")
+        self.resize(420, 480)
+
+        outer = QVBoxLayout(self)
+        self.stack = QStackedWidget()
+        outer.addWidget(self.stack)
+
+        self.setup_page = self._build_setup_page()
+        self.locked_page = self._build_locked_page()
+        self.unlocked_page = self._build_unlocked_page()
+        self.stack.addWidget(self.setup_page)
+        self.stack.addWidget(self.locked_page)
+        self.stack.addWidget(self.unlocked_page)
+
+        self.stack.setCurrentWidget(
+            self.locked_page if self.service.is_set_up() else self.setup_page
+        )
+
+    def _build_setup_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        info = QLabel(
+            "Notlarınız yalnızca bu bilgisayarda, bu şifreyle şifreli "
+            "olarak saklanır. Bu şifreyi unutursanız notlarınızı "
+            "kurtarmanın bir yolu yoktur."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        self.setup_password = QLineEdit()
+        self.setup_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.setup_password.setPlaceholderText("Yeni şifre")
+        layout.addWidget(self.setup_password)
+
+        self.setup_confirm = QLineEdit()
+        self.setup_confirm.setEchoMode(QLineEdit.EchoMode.Password)
+        self.setup_confirm.setPlaceholderText("Şifreyi tekrar yaz")
+        self.setup_confirm.returnPressed.connect(self._handle_setup)
+        layout.addWidget(self.setup_confirm)
+
+        self.setup_error = QLabel("")
+        self.setup_error.setStyleSheet("color: #d1453a;")
+        layout.addWidget(self.setup_error)
+
+        setup_button = QPushButton("Not Defterini Kur")
+        setup_button.clicked.connect(self._handle_setup)
+        layout.addWidget(setup_button)
+        layout.addStretch()
+        return page
+
+    def _handle_setup(self):
+        password = self.setup_password.text()
+        confirm = self.setup_confirm.text()
+        if len(password) < 4:
+            self.setup_error.setText("Şifre en az 4 karakter olmalı.")
+            return
+        if password != confirm:
+            self.setup_error.setText("Şifreler eşleşmiyor.")
+            return
+        self.key = self.service.set_up(password)
+        self.notes = []
+        self.setup_password.clear()
+        self.setup_confirm.clear()
+        self.setup_error.setText("")
+        self._refresh_notes_list()
+        self.stack.setCurrentWidget(self.unlocked_page)
+
+    def _build_locked_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        self.unlock_password = QLineEdit()
+        self.unlock_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.unlock_password.setPlaceholderText("Şifre")
+        self.unlock_password.returnPressed.connect(self._handle_unlock)
+        layout.addWidget(self.unlock_password)
+
+        self.unlock_error = QLabel("")
+        self.unlock_error.setStyleSheet("color: #d1453a;")
+        layout.addWidget(self.unlock_error)
+
+        unlock_button = QPushButton("Kilidi Aç")
+        unlock_button.clicked.connect(self._handle_unlock)
+        layout.addWidget(unlock_button)
+
+        forgot_button = QPushButton("Şifremi unuttum (tüm notları sil)")
+        forgot_button.clicked.connect(self._handle_reset)
+        layout.addWidget(forgot_button)
+        layout.addStretch()
+        return page
+
+    def _handle_unlock(self):
+        try:
+            key, notes = self.service.unlock(self.unlock_password.text())
+        except WrongPasswordError:
+            self.unlock_error.setText("Yanlış şifre.")
+            return
+        self.key = key
+        self.notes = notes
+        self.unlock_password.clear()
+        self.unlock_error.setText("")
+        self._refresh_notes_list()
+        self.stack.setCurrentWidget(self.unlocked_page)
+
+    def _handle_reset(self):
+        confirmed = QMessageBox.question(
+            self,
+            "Not Defterini Sıfırla",
+            "Şifre kriptografik olarak kurtarılamaz - devam ederseniz TÜM "
+            "notlar kalıcı olarak silinir ve yeni bir şifreyle sıfırdan "
+            "başlarsınız.\n\nDevam edilsin mi?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirmed != QMessageBox.StandardButton.Yes:
+            return
+        self.service.reset()
+        self.unlock_password.clear()
+        self.unlock_error.setText("")
+        self.stack.setCurrentWidget(self.setup_page)
+
+    def _build_unlocked_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+
+        button_row = QHBoxLayout()
+        add_button = QPushButton("Yeni Not")
+        add_button.clicked.connect(lambda: self._edit_note(None))
+        lock_button = QPushButton("Kilitle")
+        lock_button.clicked.connect(self._handle_lock)
+        button_row.addWidget(add_button)
+        button_row.addStretch()
+        button_row.addWidget(lock_button)
+        layout.addLayout(button_row)
+
+        self.notes_list = QListWidget()
+        self.notes_list.itemDoubleClicked.connect(self._on_note_double_clicked)
+        layout.addWidget(self.notes_list)
+
+        delete_button = QPushButton("Seçili Notu Sil")
+        delete_button.clicked.connect(self._delete_selected_note)
+        layout.addWidget(delete_button)
+        return page
+
+    def _handle_lock(self):
+        self.key = None
+        self.notes = []
+        self.stack.setCurrentWidget(self.locked_page)
+
+    def _refresh_notes_list(self):
+        self.notes_list.clear()
+        for note in sorted(
+            self.notes, key=lambda n: n.get("updated_at", ""), reverse=True
+        ):
+            item = QListWidgetItem(note.get("title") or "(başlıksız)")
+            item.setData(Qt.ItemDataRole.UserRole, note.get("id"))
+            self.notes_list.addItem(item)
+
+    def _on_note_double_clicked(self, item):
+        note_id = item.data(Qt.ItemDataRole.UserRole)
+        note = next((n for n in self.notes if n.get("id") == note_id), None)
+        if note is not None:
+            self._edit_note(note)
+
+    def _edit_note(self, existing):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Yeni Not" if existing is None else "Notu Düzenle")
+        layout = QVBoxLayout(dialog)
+
+        title_field = QLineEdit(existing.get("title", "") if existing else "")
+        title_field.setPlaceholderText("Başlık")
+        layout.addWidget(title_field)
+
+        body_field = QTextEdit(existing.get("body", "") if existing else "")
+        layout.addWidget(body_field)
+
+        button_row = QHBoxLayout()
+        cancel_button = QPushButton("İptal")
+        save_button = QPushButton("Kaydet")
+        button_row.addWidget(cancel_button)
+        button_row.addWidget(save_button)
+        layout.addLayout(button_row)
+        cancel_button.clicked.connect(dialog.reject)
+        save_button.clicked.connect(dialog.accept)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        title = title_field.text().strip()
+        body = body_field.toPlainText().strip()
+        if not title and not body:
+            return
+
+        now_iso = datetime.now().isoformat()
+        if existing is None:
+            self.notes.append(
+                {
+                    "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                    "title": title,
+                    "body": body,
+                    "updated_at": now_iso,
+                }
+            )
+        else:
+            for note in self.notes:
+                if note.get("id") == existing.get("id"):
+                    note["title"] = title
+                    note["body"] = body
+                    note["updated_at"] = now_iso
+                    break
+        self.service.save(self.key, self.notes)
+        self._refresh_notes_list()
+
+    def _delete_selected_note(self):
+        item = self.notes_list.currentItem()
+        if item is None:
+            return
+        note_id = item.data(Qt.ItemDataRole.UserRole)
+        self.notes = [n for n in self.notes if n.get("id") != note_id]
+        self.service.save(self.key, self.notes)
+        self._refresh_notes_list()
+
+
 # --------------------------------------------------------------------------
 # Masaustu kedi karakteri
 # --------------------------------------------------------------------------
@@ -2126,6 +2478,7 @@ class CatCharacter(QWidget):
         self.worker = None
         self.history = ChatHistoryManager(HISTORY_PATH)
         self.notifications = NotificationLog(NOTIFICATION_LOG_PATH)
+        self.secure_notepad_service = SecureNotepadService()
         self.history_dialog = None
         self._pending_question = None
 
@@ -2503,6 +2856,11 @@ class CatCharacter(QWidget):
         box.setWindowTitle("Kullanım İstatistikleri")
         box.setText(format_usage_stats(stats))
         box.exec()
+
+    def _show_secure_notepad(self):
+        self._register_activity()
+        dialog = SecureNotepadDialog(self.secure_notepad_service, self)
+        dialog.exec()
 
     # -- hatirlatici --------------------------------------------------------
 
@@ -3115,6 +3473,10 @@ class CatCharacter(QWidget):
         usage_stats_action = QAction("Kullanım İstatistikleri", self)
         usage_stats_action.triggered.connect(self._show_usage_stats)
         menu.addAction(usage_stats_action)
+
+        secure_notepad_action = QAction("Şifreli Not Defteri", self)
+        secure_notepad_action.triggered.connect(self._show_secure_notepad)
+        menu.addAction(secure_notepad_action)
 
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)
