@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 import '../models/chat_entry.dart';
 import '../services/history_service.dart';
 import '../services/history_sync.dart';
+import '../services/quick_questions.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -445,6 +446,21 @@ class _ChatSheetState extends State<ChatSheet> {
                     tooltip: 'Fotograf Cek',
                     onPressed:
                         _busy ? null : () => _pickImage(ImageSource.camera),
+                  ),
+                  PopupMenuButton<String>(
+                    icon: Icon(Icons.bolt_outlined, color: colors.textSecondary),
+                    tooltip: 'Hazır Sorular',
+                    enabled: !_busy,
+                    onSelected: (question) {
+                      _controller.text = question;
+                      _controller.selection = TextSelection.fromPosition(
+                        TextPosition(offset: _controller.text.length),
+                      );
+                    },
+                    itemBuilder: (context) => [
+                      for (final question in defaultQuickQuestions)
+                        PopupMenuItem(value: question, child: Text(question)),
+                    ],
                   ),
                   Expanded(
                     child: TextField(
