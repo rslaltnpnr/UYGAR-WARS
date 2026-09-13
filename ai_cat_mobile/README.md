@@ -15,7 +15,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
 - Kediyi **uzun basinca** ayarlar (kedi ismi, Gemini API Key, **acik/koyu/
   sistem temasi**) aciliyor. Tema tercihi cihazda saklanir. Ayarlar
   penceresindeki "Hakkinda" ile surum numarasini ve GitHub deposu
-  linkini gorebilirsiniz.
+  linkini gorebilirsiniz. Ayni pencerede **Dil** (Sistem/Türkçe/
+  İngilizce) secilebilir - şu an tam olarak iki dilli olan tek ekran
+  Ayarlar penceresinin kendisidir (uygulamanin geri kalani hala sabit
+  Turkce metin kullanir); "Sistem" secilirse cihazin dili Turkce ya da
+  Ingilizce degilse Turkce'ye duser.
 - 3 dakika dokunulmazsa kedi uyku moduna geciyor.
 - Sohbet gecmisi cihazda saklaniyor (en fazla 200 kayit), panelde
   goruntulenip temizlenebiliyor. Sohbet panelindeki senkron simgesiyle
