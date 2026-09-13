@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'l10n/app_strings.dart';
@@ -39,17 +40,44 @@ class _AiCatAppState extends State<AiCatApp> {
   ThemeMode _themeMode = ThemeMode.dark; // ilk yuklenene kadarki varsayilan
   SettingsService? _settings;
   Timer? _autoThemeTimer;
+  StreamSubscription? _overlaySubscription;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _listenForOverlayCloseRequests();
   }
 
   @override
   void dispose() {
     _autoThemeTimer?.cancel();
+    _overlaySubscription?.cancel();
     super.dispose();
+  }
+
+  /// "Ekranda Gez" balonu KENDI (ayri) Flutter motorunda calistigi icin
+  /// FlutterOverlayWindow.closeOverlay()'i dogrudan cagiramaz - bu metod
+  /// yalnizca ANA uygulamanin motoruna kayitli bir kanal kullanir (bkz.
+  /// screen_watch_overlay_app.dart._dismiss). Panelin "Kapat" (X)
+  /// butonu bu yuzden shareData() ile buraya bir istek yolluyor; kanalin
+  /// gercek sahibi olan biz burada closeOverlay()'i cagirip ayari da
+  /// kapatiyoruz - boylece uygulama bir dahaki acilista balonu otomatik
+  /// geri getirmez (bkz. _restoreScreenWatchOverlayIfEnabled). Bu koprü
+  /// yalnizca ana uygulama calisirken islevlidir; uygulama tamamen
+  /// kapatilmisken balonu kapatmanin yolu Ayarlar'daki anahtaridir.
+  void _listenForOverlayCloseRequests() {
+    _overlaySubscription = FlutterOverlayWindow.overlayListener.listen((event) {
+      if (event is Map && event['cmd'] == 'close_overlay') {
+        _handleOverlayCloseRequest();
+      }
+    });
+  }
+
+  Future<void> _handleOverlayCloseRequest() async {
+    await FlutterOverlayWindow.closeOverlay();
+    final prefs = await SharedPreferences.getInstance();
+    SettingsService(prefs).screenWatchOverlayEnabled = false;
   }
 
   Future<void> _loadSettings() async {
