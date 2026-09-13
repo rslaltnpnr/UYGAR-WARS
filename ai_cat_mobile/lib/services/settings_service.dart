@@ -31,6 +31,9 @@ class SettingsService {
   static const _keyWidgetSlot2Action = 'widget_slot2_action';
   static const _keyAppLockEnabled = 'app_lock_enabled';
   static const _keyAppLockPin = 'app_lock_pin';
+  static const _keyAutoThemeEnabled = 'auto_theme_enabled';
+  static const _keyAutoThemeDayStart = 'auto_theme_day_start';
+  static const _keyAutoThemeNightStart = 'auto_theme_night_start';
 
   final SharedPreferences _prefs;
 
@@ -168,4 +171,22 @@ class SettingsService {
       _prefs.setString(_keyAppLockPin, value);
     }
   }
+
+  /// Acikken, [themeMode] tercihini gunun saatine gore kendiliginden
+  /// gunduz/gece arasinda degistirir (bkz. resolveAutoThemeMode,
+  /// _AiCatAppState) - masaustu suruumundeki ayni ozelligin (auto_theme_
+  /// enabled) mobil karsiligi.
+  bool get autoThemeEnabled => _prefs.getBool(_keyAutoThemeEnabled) ?? false;
+  set autoThemeEnabled(bool value) =>
+      _prefs.setBool(_keyAutoThemeEnabled, value);
+
+  String get autoThemeDayStart =>
+      _prefs.getString(_keyAutoThemeDayStart) ?? '07:00';
+  set autoThemeDayStart(String value) =>
+      _prefs.setString(_keyAutoThemeDayStart, value);
+
+  String get autoThemeNightStart =>
+      _prefs.getString(_keyAutoThemeNightStart) ?? '19:00';
+  set autoThemeNightStart(String value) =>
+      _prefs.setString(_keyAutoThemeNightStart, value);
 }
