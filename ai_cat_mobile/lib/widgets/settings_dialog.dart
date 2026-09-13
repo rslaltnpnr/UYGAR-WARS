@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/app_lock.dart';
 import '../services/backup_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
@@ -33,6 +34,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late bool _autoBackupEnabled;
   late WidgetLaunchAction _widgetSlot1Action;
   late WidgetLaunchAction _widgetSlot2Action;
+  late bool _appLockEnabled;
   bool _obscureKey = true;
 
   @override
@@ -46,6 +48,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _autoBackupEnabled = widget.settings.autoBackupEnabled;
     _widgetSlot1Action = widget.settings.widgetSlot1Action;
     _widgetSlot2Action = widget.settings.widgetSlot2Action;
+    _appLockEnabled = widget.settings.appLockEnabled;
   }
 
   @override
@@ -76,6 +79,83 @@ class _SettingsDialogState extends State<SettingsDialog> {
     HomeWidget.updateWidget(androidName: 'CatWidgetProvider');
     widget.onThemeModeChanged(_themeMode);
     Navigator.of(context).pop();
+  }
+
+  /// [enable] true: yeni bir PIN belirlemesi istenir, gecerli bir PIN
+  /// girilip onaylanmadan kilit acilmaz (iptal edilirse anahtar hic
+  /// degismez). false: kilidi kapatir ve saklanan PIN'i siler - boylece
+  /// tekrar acmak her zaman yeni bir PIN gerektirir, eski PIN'i "hatirlama"
+  /// riski olmaz.
+  Future<void> _toggleAppLock(bool enable) async {
+    if (!enable) {
+      widget.settings.appLockEnabled = false;
+      widget.settings.appLockPin = null;
+      setState(() => _appLockEnabled = false);
+      return;
+    }
+    final pin = await _promptForNewPin();
+    if (pin == null) return;
+    widget.settings.appLockPin = pin;
+    widget.settings.appLockEnabled = true;
+    setState(() => _appLockEnabled = true);
+  }
+
+  Future<String?> _promptForNewPin() async {
+    final pinController = TextEditingController();
+    final confirmController = TextEditingController();
+    String? error;
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Uygulama Kilidi PIN\'i'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: pinController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: '4-6 haneli PIN'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmController,
+                obscureText: true,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'PIN\'i tekrar yaz'),
+              ),
+              if (error != null) ...[
+                const SizedBox(height: 8),
+                Text(error!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('İptal'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final pin = pinController.text;
+                if (!isValidAppLockPin(pin)) {
+                  setDialogState(() => error = 'PIN 4-6 haneli rakam olmalı.');
+                  return;
+                }
+                if (pin != confirmController.text) {
+                  setDialogState(() => error = 'PIN\'ler eşleşmiyor.');
+                  return;
+                }
+                Navigator.of(dialogContext).pop(pin);
+              },
+              child: const Text('Kaydet'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _shareBackup() async {
@@ -259,6 +339,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               value: _autoBackupEnabled,
               onChanged: (value) => setState(() => _autoBackupEnabled = value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                'Uygulama Kilidi',
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+              ),
+              subtitle: Text(
+                'Açılışta ve arka plandan dönüşte bir PIN sorulur.',
+                style: TextStyle(color: colors.textMuted, fontSize: 11),
+              ),
+              value: _appLockEnabled,
+              onChanged: (value) => _toggleAppLock(value),
             ),
             const SizedBox(height: 16),
             Align(
