@@ -241,13 +241,17 @@ class _LiveControlScreenState extends State<LiveControlScreen> {
                     _RoundIconButton(
                       icon: Icons.expand_less,
                       tooltip: 'Yukarı kaydır',
-                      onTap: () => _session.sendScroll(-3),
+                      // pynput'un mouse.scroll(dx, dy) yonu, dugmenin
+                      // gorsel yonunun TERSI: pozitif dy tekerlegi
+                      // asagiya (kullaniciya dogru) donduruyor, bu da
+                      // ekran icerigini YUKARI kaydiriyor.
+                      onTap: () => _session.sendScroll(3),
                     ),
                     const SizedBox(height: 8),
                     _RoundIconButton(
                       icon: Icons.expand_more,
                       tooltip: 'Aşağı kaydır',
-                      onTap: () => _session.sendScroll(3),
+                      onTap: () => _session.sendScroll(-3),
                     ),
                     const SizedBox(height: 8),
                     _RoundIconButton(

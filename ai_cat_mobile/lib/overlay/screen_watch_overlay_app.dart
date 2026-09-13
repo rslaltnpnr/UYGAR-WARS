@@ -82,20 +82,41 @@ class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
     // pencere boyutundan bagimsiz okunur).
     final display = View.of(context).display;
     final screenHeightDp = display.size.height / display.devicePixelRatio;
-    await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
-    // Balon suruklenerek ekranin herhangi bir kosesine (orn. en alta)
-    // birakilmis olabilir; panel o konumdan buyurse ekran disina tasip
-    // erisilemez hale gelir. Bu yuzden genislemeden once konum, gravity
-    // (center) etrafinda (0,0)'a - yani tam ekran ortasina - sabitlenir.
-    await _overlayChannel.invokeMethod('updateOverlayPosition', {
-      'x': 0,
-      'y': 0,
-    });
-    await FlutterOverlayWindow.resizeOverlay(
-      WindowSize.matchParent,
-      ScreenWatchOverlaySizes.panelHeightDp(screenHeightDp),
-      false,
-    );
+    final targetHeightDp = ScreenWatchOverlaySizes.panelHeightDp(screenHeightDp);
+    try {
+      await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
+      // Balon suruklenerek ekranin herhangi bir kosesine (orn. en alta)
+      // birakilmis olabilir; panel o konumdan buyurse ekran disina tasip
+      // erisilemez hale gelir. Bu yuzden genislemeden once konum, gravity
+      // (center) etrafinda (0,0)'a - yani tam ekran ortasina - sabitlenir.
+      await _overlayChannel.invokeMethod('updateOverlayPosition', {
+        'x': 0,
+        'y': 0,
+      });
+      final resized = await FlutterOverlayWindow.resizeOverlay(
+        WindowSize.matchParent,
+        targetHeightDp,
+        false,
+      );
+      // Bazi cihazlarda (orn. OEM pencere yoneticisi kisitlamalari) ilk
+      // deneme sessizce basarisiz olabiliyor - pencere balon boyutunda
+      // kalirsa asagidaki genis panel icerigi (bkz. _buildPanel) o kucuk
+      // alanda tasar/kirpilir. Kisa bir bekleme sonrasi bir kez daha
+      // deneriz; bu yeniden deneme cogu zaman gereksiz ama ucretsizdir.
+      if (resized != true) {
+        await Future.delayed(const Duration(milliseconds: 150));
+        await FlutterOverlayWindow.resizeOverlay(
+          WindowSize.matchParent,
+          targetHeightDp,
+          false,
+        );
+      }
+    } catch (_) {
+      // Konumlandirma/boyutlandirma cagrilarindan biri basarisiz olsa
+      // bile paneli gostermeye devam ederiz - asagidaki _buildPanel
+      // tasmaya karsi dayanikli (bkz. TextOverflow.ellipsis), boylece
+      // pencere hala kucukse en azindan okunabilir kalir.
+    }
     if (!mounted) return;
     setState(() => _expanded = true);
     await _loadProfile();
@@ -258,17 +279,29 @@ class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
               const Expanded(
                 child: Text(
                   'Bilgisayar Ekranı',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
               ),
+              // Pencere (bkz. _expand) bazi cihazlarda beklenen tam boyuta
+              // buyumeyip balon kadar kucuk kalabiliyor - bu dugmeler
+              // varsayilan IconButton'dan daha kucuk bir dokunma alani
+              // (constraints/padding sifirlanmis) kullanarak o durumda
+              // bile basliktan daha az yer kaplar, kapatma/kuculme
+              // erisilebilirligini korur.
               IconButton(
-                icon: const Icon(Icons.remove, size: 20),
+                icon: const Icon(Icons.remove, size: 18),
                 tooltip: 'Küçült',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _collapse,
               ),
               IconButton(
-                icon: const Icon(Icons.close, size: 20),
+                icon: const Icon(Icons.close, size: 18),
                 tooltip: 'Kapat',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 onPressed: _dismiss,
               ),
             ],
