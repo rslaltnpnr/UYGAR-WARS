@@ -170,7 +170,7 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   Desteklenmiyorsa ana ekranda bos bir alana uzun basip "Widget'lar"
   menusunden elle de eklenebilir. Bu iki butonun hangi eylemi
   yapacagi ayni ayarlar penceresindeki "1. Buton" / "2. Buton"
-  secicilerinden **Sohbet / Kumanda / Hatırlatıcı** arasinda
+  secicilerinden **Sohbet / Kumanda / Hatırlatıcı / Not Defteri** arasinda
   degistirilebilir (varsayilan: Sohbet + Kumanda) - Kaydet'e basildiginda
   widget aninda guncellenir. Widget ayrica eslesik bilgisayarin son
   bilinen baglanti durumunu da gosterir ("Ev · bagli" / "bagli degil") -

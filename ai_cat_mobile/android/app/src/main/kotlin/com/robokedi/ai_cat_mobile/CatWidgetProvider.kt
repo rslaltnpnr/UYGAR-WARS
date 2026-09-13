@@ -34,6 +34,7 @@ class CatWidgetProvider : HomeWidgetProvider() {
         SlotAction("chat", R.string.widget_action_chat),
         SlotAction("remote", R.string.widget_action_remote),
         SlotAction("reminder", R.string.widget_action_reminder),
+        SlotAction("notepad", R.string.widget_action_notepad),
     )
 
     private fun slotActionFor(uriValue: String?, fallback: String) =
