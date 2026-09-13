@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:home_widget/home_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_strings.dart';
 import '../services/app_lock.dart';
 import '../services/auto_theme.dart';
 import '../services/backup_service.dart';
@@ -18,11 +19,13 @@ import 'about_dialog.dart';
 class SettingsDialog extends StatefulWidget {
   final SettingsService settings;
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final ValueChanged<String> onLanguageCodeChanged;
 
   const SettingsDialog({
     super.key,
     required this.settings,
     required this.onThemeModeChanged,
+    required this.onLanguageCodeChanged,
   });
 
   @override
@@ -41,6 +44,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late final TextEditingController _autoThemeDayStartController;
   late final TextEditingController _autoThemeNightStartController;
   late VibrationPatternOption _vibrationPattern;
+  late String _languageCode;
   bool _obscureKey = true;
 
   @override
@@ -61,6 +65,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _autoThemeNightStartController =
         TextEditingController(text: widget.settings.autoThemeNightStart);
     _vibrationPattern = widget.settings.notificationVibrationPattern;
+    _languageCode = widget.settings.languageCode;
   }
 
   @override
@@ -86,6 +91,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
     final nightStart = parseHhMm(_autoThemeNightStartController.text);
     if (nightStart != null) widget.settings.autoThemeNightStart = nightStart;
     widget.settings.notificationVibrationPattern = _vibrationPattern;
+    widget.settings.languageCode = _languageCode;
+    widget.onLanguageCodeChanged(_languageCode);
     widget.settings.widgetSlot1Action = _widgetSlot1Action;
     widget.settings.widgetSlot2Action = _widgetSlot2Action;
     HomeWidget.saveWidgetData<String>(
@@ -247,9 +254,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final strings = AppStringsScope.of(context);
     return AlertDialog(
       backgroundColor: colors.panel,
-      title: Text('Ayarlar', style: TextStyle(color: colors.textPrimary)),
+      title: Text(strings.t('settings_title'),
+          style: TextStyle(color: colors.textPrimary)),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -258,7 +267,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               controller: _nameController,
               style: TextStyle(color: colors.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Kedi ismi',
+                labelText: strings.t('settings_character_name'),
                 labelStyle: TextStyle(color: colors.textSecondary),
               ),
             ),
@@ -268,7 +277,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               obscureText: _obscureKey,
               style: TextStyle(color: colors.textPrimary),
               decoration: InputDecoration(
-                labelText: 'Gemini API Key',
+                labelText: strings.t('settings_api_key'),
                 labelStyle: TextStyle(color: colors.textSecondary),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -282,31 +291,57 @@ class _SettingsDialogState extends State<SettingsDialog> {
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerLeft,
-              child: Text('Tema',
+              child: Text(strings.t('settings_theme'),
                   style: TextStyle(color: colors.textSecondary, fontSize: 12)),
             ),
             const SizedBox(height: 6),
             SegmentedButton<ThemeMode>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: ThemeMode.system,
-                  label: Text('Sistem'),
-                  icon: Icon(Icons.brightness_auto),
+                  label: Text(strings.t('settings_theme_system')),
+                  icon: const Icon(Icons.brightness_auto),
                 ),
                 ButtonSegment(
                   value: ThemeMode.light,
-                  label: Text('Açık'),
-                  icon: Icon(Icons.light_mode),
+                  label: Text(strings.t('settings_theme_light')),
+                  icon: const Icon(Icons.light_mode),
                 ),
                 ButtonSegment(
                   value: ThemeMode.dark,
-                  label: Text('Koyu'),
-                  icon: Icon(Icons.dark_mode),
+                  label: Text(strings.t('settings_theme_dark')),
+                  icon: const Icon(Icons.dark_mode),
                 ),
               ],
               selected: {_themeMode},
               onSelectionChanged: (selection) =>
                   setState(() => _themeMode = selection.first),
+            ),
+            const SizedBox(height: 16),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(strings.t('settings_language'),
+                  style: TextStyle(color: colors.textSecondary, fontSize: 12)),
+            ),
+            const SizedBox(height: 6),
+            SegmentedButton<String>(
+              segments: [
+                ButtonSegment(
+                  value: 'system',
+                  label: Text(strings.t('settings_language_system')),
+                ),
+                ButtonSegment(
+                  value: 'tr',
+                  label: Text(strings.t('settings_language_tr')),
+                ),
+                ButtonSegment(
+                  value: 'en',
+                  label: Text(strings.t('settings_language_en')),
+                ),
+              ],
+              selected: {_languageCode},
+              onSelectionChanged: (selection) =>
+                  setState(() => _languageCode = selection.first),
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -481,13 +516,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
             context: context,
             builder: (_) => const AboutAppDialog(),
           ),
-          child: const Text('Hakkında'),
+          child: Text(strings.t('settings_about')),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Iptal'),
+          child: Text(strings.t('settings_cancel')),
         ),
-        ElevatedButton(onPressed: _save, child: const Text('Kaydet')),
+        ElevatedButton(onPressed: _save, child: Text(strings.t('settings_save'))),
       ],
     );
   }

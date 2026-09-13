@@ -149,7 +149,10 @@ void main() {
         await tester.pumpWidget(
           MaterialApp(
             theme: ThemeData(extensions: const [AppColors.dark]),
-            home: HomeScreen(onThemeModeChanged: (_) {}),
+            home: HomeScreen(
+              onThemeModeChanged: (_) {},
+              onLanguageCodeChanged: (_) {},
+            ),
           ),
         );
         await tester.pump();

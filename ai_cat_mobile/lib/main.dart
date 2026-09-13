@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'l10n/app_strings.dart';
 import 'screens/app_lock_screen.dart';
 import 'screens/home_screen.dart';
 import 'services/auto_theme.dart';
@@ -73,12 +74,28 @@ class _AiCatAppState extends State<AiCatApp> {
     setState(() => _themeMode = mode);
   }
 
+  void _onLanguageCodeChanged(String languageCode) {
+    setState(() => _settings?.languageCode = languageCode);
+  }
+
+  /// 'system' iken cihazin dilini kullanir (desteklenmiyorsa Turkce'ye
+  /// duser); aksi halde kullanicinin acikca sectigi dili kullanir.
+  String _resolveLanguageCode() {
+    final stored = _settings?.languageCode ?? 'system';
+    if (stored != 'system') return resolveSupportedLanguageCode(stored);
+    final deviceLanguage =
+        WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    return resolveSupportedLanguageCode(deviceLanguage);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final languageCode = _resolveLanguageCode();
     return MaterialApp(
       title: 'AI Kedi Asistani',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
+      locale: Locale(languageCode),
       theme: ThemeData(
         brightness: Brightness.light,
         useMaterial3: true,
@@ -101,9 +118,15 @@ class _AiCatAppState extends State<AiCatApp> {
       ),
       home: _settings == null
           ? const Scaffold(body: Center(child: CircularProgressIndicator()))
-          : _AppLockGate(
-              settings: _settings!,
-              child: HomeScreen(onThemeModeChanged: _onThemeModeChanged),
+          : AppStringsScope(
+              strings: AppStrings(languageCode),
+              child: _AppLockGate(
+                settings: _settings!,
+                child: HomeScreen(
+                  onThemeModeChanged: _onThemeModeChanged,
+                  onLanguageCodeChanged: _onLanguageCodeChanged,
+                ),
+              ),
             ),
     );
   }

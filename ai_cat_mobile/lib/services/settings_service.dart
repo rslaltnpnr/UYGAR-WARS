@@ -37,6 +37,7 @@ class SettingsService {
   static const _keyAutoThemeNightStart = 'auto_theme_night_start';
   static const _keyNotificationVibrationPattern =
       'notification_vibration_pattern';
+  static const _keyLanguageCode = 'language_code';
 
   final SharedPreferences _prefs;
 
@@ -201,4 +202,10 @@ class SettingsService {
       );
   set notificationVibrationPattern(VibrationPatternOption value) =>
       _prefs.setString(_keyNotificationVibrationPattern, value.value);
+
+  /// 'system'/'tr'/'en' - bkz. AppStrings/resolveSupportedLanguageCode.
+  /// Varsayilan 'system': cihazin dili desteklenen bir dilse (tr/en) o
+  /// kullanilir, degilse Turkce'ye duser.
+  String get languageCode => _prefs.getString(_keyLanguageCode) ?? 'system';
+  set languageCode(String value) => _prefs.setString(_keyLanguageCode, value);
 }

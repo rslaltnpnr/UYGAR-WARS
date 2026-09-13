@@ -31,8 +31,13 @@ import '../widgets/usage_stats_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   final ValueChanged<ThemeMode> onThemeModeChanged;
+  final ValueChanged<String> onLanguageCodeChanged;
 
-  const HomeScreen({super.key, required this.onThemeModeChanged});
+  const HomeScreen({
+    super.key,
+    required this.onThemeModeChanged,
+    required this.onLanguageCodeChanged,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -453,6 +458,7 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (_) => SettingsDialog(
         settings: settings,
         onThemeModeChanged: widget.onThemeModeChanged,
+        onLanguageCodeChanged: widget.onLanguageCodeChanged,
       ),
     ).then(
       (_) => setState(() {}),
