@@ -16,6 +16,7 @@ import pytest
 from main import (
     DEFAULT_QUICK_QUESTIONS,
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
+    ScreenshotHistoryLog,
     SecureNotepadService,
     WrongPasswordError,
     _parse_version,
@@ -28,6 +29,7 @@ from main import (
     format_automation_rules,
     format_history_entries,
     format_notifications,
+    format_screenshot_history,
     format_usage_stats,
     is_newer_version,
     is_url_safe_to_open,
@@ -637,6 +639,49 @@ class TestDefaultQuickQuestions:
 
     def test_tekrar_eden_soru_yok(self):
         assert len(DEFAULT_QUICK_QUESTIONS) == len(set(DEFAULT_QUICK_QUESTIONS))
+
+
+class TestScreenshotHistoryLog:
+    def test_yeni_kayit_dosyaya_yazilir(self, tmp_path):
+        log = ScreenshotHistoryLog(str(tmp_path / "screenshot_history.json"))
+        log.add("Telefon (192.168.1.5)")
+        assert len(log.entries) == 1
+        assert log.entries[0]["source"] == "Telefon (192.168.1.5)"
+        assert "time" in log.entries[0]
+
+    def test_kalicidir(self, tmp_path):
+        path = str(tmp_path / "screenshot_history.json")
+        log = ScreenshotHistoryLog(path)
+        log.add("Telefon (192.168.1.5)")
+        reloaded = ScreenshotHistoryLog(path)
+        assert len(reloaded.entries) == 1
+
+    def test_maksimum_kayit_sayisini_asmaz(self, tmp_path):
+        log = ScreenshotHistoryLog(str(tmp_path / "screenshot_history.json"))
+        for i in range(60):
+            log.add(f"Telefon ({i})")
+        assert len(log.entries) == 50
+        assert log.entries[-1]["source"] == "Telefon (59)"
+
+    def test_clear_tum_kayitlari_siler(self, tmp_path):
+        log = ScreenshotHistoryLog(str(tmp_path / "screenshot_history.json"))
+        log.add("Telefon (192.168.1.5)")
+        log.clear()
+        assert log.entries == []
+
+
+class TestFormatScreenshotHistory:
+    def test_bos_liste_bos_metin_dondurur(self):
+        assert format_screenshot_history([]) == ""
+
+    def test_en_yeni_en_ustte(self):
+        entries = [
+            {"time": "2024-01-01 10:00", "source": "Telefon (a)"},
+            {"time": "2024-01-02 10:00", "source": "Telefon (b)"},
+        ]
+        lines = format_screenshot_history(entries).split("\n")
+        assert "Telefon (b)" in lines[0]
+        assert "Telefon (a)" in lines[1]
 
 
 class TestSecureNotepadService:

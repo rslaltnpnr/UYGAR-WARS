@@ -3,6 +3,7 @@ chat_history.json
 remote_access.log
 notifications.json
 secure_notepad.dat
+screenshot_history.json
 backups/
 remote_cert.pem
 remote_key.pem

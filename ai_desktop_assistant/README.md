@@ -167,6 +167,12 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Ekran Görüntüsü Geçmişi**: sag tik menusunden, telefonun "Ekran
+  Görüntüsü Al" ile ne zaman istekte bulundugunu gorebilirsiniz -
+  gorselin kendisi hicbir yerde saklanmaz (yalnizca istek anlik olarak
+  telefona gonderilir, bkz. `capture_screenshot_jpeg_base64`); sadece
+  zaman damgasi ve istemci IP'si `screenshot_history.json` dosyasinda
+  tutulur, boylece bu ozellik hicbir gorsel veri saklama riski eklemez.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar
