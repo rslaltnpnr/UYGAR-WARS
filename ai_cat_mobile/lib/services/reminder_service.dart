@@ -1,6 +1,10 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+
+import 'settings_service.dart';
+import 'vibration_pattern.dart';
 
 /// Yerel bildirimleri (flutter_local_notifications) yonetir: kullanicinin
 /// "N dakika sonra hatirlat" seklinde kurdugu tekil hatirlaticilari
@@ -43,6 +47,11 @@ class ReminderService {
     return granted ?? true;
   }
 
+  Future<VibrationPatternOption> _vibrationOption() async {
+    final prefs = await SharedPreferences.getInstance();
+    return SettingsService(prefs).notificationVibrationPattern;
+  }
+
   Future<void> scheduleReminder({
     required Duration delay,
     required String message,
@@ -50,14 +59,23 @@ class ReminderService {
     await _ensureInitialized();
     final id = _nextId++;
     final fireTime = tz.TZDateTime.now(tz.UTC).add(delay);
-    const androidDetails = AndroidNotificationDetails(
-      'reminders',
+    final vibration = await _vibrationOption();
+    // Android 8+'ta bir kanalin titresim ayari, ilk olusturuldugunda
+    // kilitlenir - ayni kanal id'sine sonradan farkli bir
+    // AndroidNotificationDetails gonderilmesi hicbir sey degistirmez.
+    // Bu yuzden kanal id'sine secilen paterni ekliyoruz: kullanici
+    // paterni degistirdiginde yeni (ve gercekten farkli davranan) bir
+    // kanal olusur, eski kanal kullanilmaz kalir ama zararsizdir.
+    final androidDetails = AndroidNotificationDetails(
+      'reminders_${vibration.value}',
       'Hatırlatıcılar',
       channelDescription: 'Kurduğunuz hatırlatıcılar burada görünür.',
       importance: Importance.high,
       priority: Priority.high,
+      enableVibration: vibration.enableVibration,
+      vibrationPattern: vibration.pattern,
     );
-    const details = NotificationDetails(android: androidDetails);
+    final details = NotificationDetails(android: androidDetails);
     await _plugin.zonedSchedule(
       id,
       'Hatırlatıcı',
@@ -76,15 +94,18 @@ class ReminderService {
   /// gosterir (bkz. HomeScreen'in periyodik /alerts yoklamasi).
   Future<void> showAlert({required String title, required String message}) async {
     await _ensureInitialized();
-    const androidDetails = AndroidNotificationDetails(
-      'desktop_alerts',
+    final vibration = await _vibrationOption();
+    final androidDetails = AndroidNotificationDetails(
+      'desktop_alerts_${vibration.value}',
       'Masaüstü Uyarıları',
       channelDescription:
           'Eşleşen bilgisayarda oluşan hata/uyarılar burada görünür.',
       importance: Importance.high,
       priority: Priority.high,
+      enableVibration: vibration.enableVibration,
+      vibrationPattern: vibration.pattern,
     );
-    const details = NotificationDetails(android: androidDetails);
+    final details = NotificationDetails(android: androidDetails);
     await _plugin.show(_nextId++, title, message, details);
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/remote_profile.dart';
+import 'vibration_pattern.dart';
 import 'widget_service.dart';
 
 /// Ayarlari (API anahtari, kedi ismi, model adi) cihazda saklar.
@@ -34,6 +35,8 @@ class SettingsService {
   static const _keyAutoThemeEnabled = 'auto_theme_enabled';
   static const _keyAutoThemeDayStart = 'auto_theme_day_start';
   static const _keyAutoThemeNightStart = 'auto_theme_night_start';
+  static const _keyNotificationVibrationPattern =
+      'notification_vibration_pattern';
 
   final SharedPreferences _prefs;
 
@@ -189,4 +192,13 @@ class SettingsService {
       _prefs.getString(_keyAutoThemeNightStart) ?? '19:00';
   set autoThemeNightStart(String value) =>
       _prefs.setString(_keyAutoThemeNightStart, value);
+
+  /// Hatirlatici ve masaustu uyari bildirimlerinde kullanilacak titresim
+  /// paterni - bkz. VibrationPatternOption/ReminderService.
+  VibrationPatternOption get notificationVibrationPattern =>
+      VibrationPatternOption.fromValue(
+        _prefs.getString(_keyNotificationVibrationPattern),
+      );
+  set notificationVibrationPattern(VibrationPatternOption value) =>
+      _prefs.setString(_keyNotificationVibrationPattern, value.value);
 }

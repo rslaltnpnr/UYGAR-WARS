@@ -32,7 +32,10 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   ayni ozelligin mobil karsiligi.
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
-  cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.
+  cihaz uzerinde calisir. Android 13+ icin bildirim izni ister. Ayarlar
+  penceresindeki "Bildirim Titreşim Paterni" ile hatirlatici ve
+  masaustu uyari bildirimlerinin titresimini (Sistem Varsayılanı/Kısa/
+  Uzun/Çift Vuruş/Kapalı) secebilirsiniz.
 - **Bildirim Gecmisi** (zil ikonu): uygulamanin gosterdigi tum
   bildirimlerin (masaustu uyarilari, kurulan hatirlaticilar) kalici bir
   listesini gosterir - telefonun kendi bildirim gecmisinden silinse de

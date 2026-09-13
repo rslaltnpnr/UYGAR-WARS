@@ -7,6 +7,7 @@ import '../services/auto_theme.dart';
 import '../services/backup_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
+import '../services/vibration_pattern.dart';
 import '../services/widget_service.dart';
 import '../theme/app_colors.dart';
 import 'about_dialog.dart';
@@ -39,6 +40,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late bool _autoThemeEnabled;
   late final TextEditingController _autoThemeDayStartController;
   late final TextEditingController _autoThemeNightStartController;
+  late VibrationPatternOption _vibrationPattern;
   bool _obscureKey = true;
 
   @override
@@ -58,6 +60,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         TextEditingController(text: widget.settings.autoThemeDayStart);
     _autoThemeNightStartController =
         TextEditingController(text: widget.settings.autoThemeNightStart);
+    _vibrationPattern = widget.settings.notificationVibrationPattern;
   }
 
   @override
@@ -82,6 +85,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
     if (dayStart != null) widget.settings.autoThemeDayStart = dayStart;
     final nightStart = parseHhMm(_autoThemeNightStartController.text);
     if (nightStart != null) widget.settings.autoThemeNightStart = nightStart;
+    widget.settings.notificationVibrationPattern = _vibrationPattern;
     widget.settings.widgetSlot1Action = _widgetSlot1Action;
     widget.settings.widgetSlot2Action = _widgetSlot2Action;
     HomeWidget.saveWidgetData<String>(
@@ -406,6 +410,28 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               value: _appLockEnabled,
               onChanged: (value) => _toggleAppLock(value),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Bildirim Titreşim Paterni',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<VibrationPatternOption>(
+              initialValue: _vibrationPattern,
+              items: VibrationPatternOption.values
+                  .map(
+                    (option) => DropdownMenuItem(
+                      value: option,
+                      child: Text(option.label),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) setState(() => _vibrationPattern = value);
+              },
             ),
             const SizedBox(height: 16),
             Align(
