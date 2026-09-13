@@ -167,6 +167,12 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Tekrarlayan Hatırlatıcılar**: "Hatirlatici Kur" ile bir hatirlatici
+  olustururken artik tek seferlik yerine belirttiginiz dakika araligiyla
+  surekli tekrarlanmasini secebilirsiniz; aktif tekrarlayan hatirlatici
+  varken sag tik menusunde beliren "Tekrarlayan Hatirlaticilari Durdur"
+  ile hepsi birden iptal edilebilir. Tek seferlik hatirlaticilar gibi
+  bunlar da bellek icidir - uygulama yeniden baslatildiginda sifirlanir.
 - **Ekran Görüntüsü Geçmişi**: sag tik menusunden, telefonun "Ekran
   Görüntüsü Al" ile ne zaman istekte bulundugunu gorebilirsiniz -
   gorselin kendisi hicbir yerde saklanmaz (yalnizca istek anlik olarak

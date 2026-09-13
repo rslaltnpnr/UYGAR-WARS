@@ -2569,6 +2569,12 @@ class CatCharacter(QWidget):
         self.revert_timer.setSingleShot(True)
         self.revert_timer.timeout.connect(lambda: self._set_state("norm"))
 
+        # Tekrarlayan hatirlaticilarin QTimer'lari - uygulama kapanana kadar
+        # (kalici bir depolama yok, tek seferlik hatirlaticilar gibi) burada
+        # tutulur, boylece "Tekrarlayan Hatirlaticilari Durdur" hepsini
+        # birden stop() edebilir.
+        self._repeating_reminder_timers = []
+
         self.remote_server = RemoteCommandServer(self.config, self.history, self)
         self.remote_server.screenshot_history = self.screenshot_history
         self.remote_server.command_received.connect(self._on_remote_command)
@@ -2962,9 +2968,26 @@ class CatCharacter(QWidget):
             return
         text = text.strip() or "Hatirlatma zamani!"
 
-        QTimer.singleShot(minutes * 60 * 1000, lambda: self._fire_reminder(text))
+        repeat = QMessageBox.question(
+            self,
+            "Hatirlatici Kur",
+            f"Bu hatirlatici her {minutes} dakikada bir tekrarlansin mi?\n"
+            "(Hayir derseniz yalnizca bir kez hatirlatilir.)",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        ) == QMessageBox.StandardButton.Yes
 
-        confirm_message = f"{minutes} dakika sonra hatirlatilacaksiniz."
+        interval_ms = minutes * 60 * 1000
+        if repeat:
+            timer = QTimer(self)
+            timer.timeout.connect(lambda: self._fire_reminder(text))
+            timer.start(interval_ms)
+            self._repeating_reminder_timers.append(timer)
+            confirm_message = f"Her {minutes} dakikada bir tekrarlanacak."
+        else:
+            QTimer.singleShot(interval_ms, lambda: self._fire_reminder(text))
+            confirm_message = f"{minutes} dakika sonra hatirlatilacaksiniz."
+
         if self.tray_icon is not None:
             self.tray_icon.showMessage(
                 "Hatirlatici Kuruldu",
@@ -2975,6 +2998,19 @@ class CatCharacter(QWidget):
         else:
             QMessageBox.information(self, "Hatirlatici Kuruldu", confirm_message)
         self.notifications.add("Hatirlatici Kuruldu", confirm_message)
+
+    def _stop_repeating_reminders(self):
+        self._register_activity()
+        if not self._repeating_reminder_timers:
+            QMessageBox.information(self, "Tekrarlayan Hatirlaticilar", "Aktif tekrarlayan hatirlatici yok.")
+            return
+        count = len(self._repeating_reminder_timers)
+        for timer in self._repeating_reminder_timers:
+            timer.stop()
+        self._repeating_reminder_timers = []
+        QMessageBox.information(
+            self, "Tekrarlayan Hatirlaticilar", f"{count} tekrarlayan hatirlatici durduruldu."
+        )
 
     def _fire_reminder(self, text):
         self._register_activity()
@@ -3570,6 +3606,11 @@ class CatCharacter(QWidget):
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)
         menu.addAction(reminder_action)
+
+        if self._repeating_reminder_timers:
+            stop_reminders_action = QAction("Tekrarlayan Hatirlaticilari Durdur", self)
+            stop_reminders_action.triggered.connect(self._stop_repeating_reminders)
+            menu.addAction(stop_reminders_action)
 
         automation_action = QAction("Otomasyon Kurallari...", self)
         automation_action.triggered.connect(self._show_automation_rules)
