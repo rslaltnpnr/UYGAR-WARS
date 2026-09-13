@@ -167,6 +167,11 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Bağlantılar İçin Son Kullanım Göstergesi**: "Uzaktan Kumanda"
+  penceresindeki "Son baglanan cihazlar" listesi artik mutlak zaman
+  damgasinin ("2024-01-01 12:00" gibi) yaninda "5 dakika once", "3 saat
+  once", "2 gun once" gibi goreli bir gosterge de icerir - hangi cihazin
+  ne kadar sure once baglandigini tek bakista anlamak icin.
 - **Kişilikler Arası Hızlı Geçiş**: sag tik menusundeki "Kisilik" alt
   menusunden ("Varsayilan", "Sakaci", "Ciddi", "Nazik", "Enerjik")
   kedinizin Gemini'ye verdigi cevaplardaki tonunu aninda degistirebilirsiniz -
