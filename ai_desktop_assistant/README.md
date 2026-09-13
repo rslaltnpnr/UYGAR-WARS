@@ -145,6 +145,13 @@ karakteri (PyQt6).
   satirina erismez; eklenen her baglanti otomasyon kurallarindaki
   ayni SSRF korumasindan (bkz. yukarida) gecer, boylece bu ozellik
   hicbir yeni saldiri yuzeyi acmaz.
+- **Kullanım İstatistikleri**: sag tik menusunden toplam/bugün/bu hafta
+  sorulan soru sayısını, favori ve hatalı yanıt sayısını, bildirim/
+  otomasyon kuralı/özel komut/bağlanan cihaz sayısını ve ilk soru
+  tarihini tek bir pencerede görebilirsiniz - mobil uygulamadaki
+  "Kullanım İstatistikleri" panelinin masaüstü karşılığı, hiçbir yeni
+  veri saklamaz, zaten cihazda duran verilerden her açılışta yeniden
+  hesaplar.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar
