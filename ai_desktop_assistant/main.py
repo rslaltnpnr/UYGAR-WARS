@@ -474,6 +474,77 @@ def format_notifications(entries):
     return "\n".join(lines)
 
 
+def compute_usage_stats(
+    history_entries, notifications, automation_rules, custom_commands,
+    recent_connections, now,
+):
+    """Uygulamanin cihazdaki mevcut verilerinden (sohbet gecmisi,
+    bildirimler, otomasyon kurallari, ozel komutlar, son baglanan
+    cihazlar) bir "Kullanım İstatistikleri" anlik goruntusu hesaplar -
+    hicbir yeni veri saklamaz, her cagrildiginda yeniden hesaplar
+    (mobil suruumundeki UsageStatsService.compute() ile ayni fikirde).
+    [history_entries]'teki "time" alani ChatHistoryManager.add()'in
+    urettigi "%Y-%m-%d %H:%M" bicimindedir; ayristirilamayan (bozuk)
+    kayitlar sessizce atlanir."""
+    week_ago = now - timedelta(days=7)
+    questions_today = 0
+    questions_this_week = 0
+    error_count = 0
+    favorite_count = 0
+    first_question_at = None
+    for entry in history_entries:
+        try:
+            entry_time = datetime.strptime(entry.get("time", ""), "%Y-%m-%d %H:%M")
+        except (ValueError, TypeError):
+            continue
+        if entry_time.date() == now.date():
+            questions_today += 1
+        if entry_time >= week_ago:
+            questions_this_week += 1
+        if entry.get("is_error"):
+            error_count += 1
+        if entry.get("favorite"):
+            favorite_count += 1
+        if first_question_at is None or entry_time < first_question_at:
+            first_question_at = entry_time
+
+    return {
+        "total_questions": len(history_entries),
+        "questions_today": questions_today,
+        "questions_this_week": questions_this_week,
+        "error_count": error_count,
+        "favorite_count": favorite_count,
+        "notification_count": len(notifications),
+        "automation_rule_count": len(automation_rules),
+        "custom_command_count": len(custom_commands),
+        "connected_device_count": len(recent_connections),
+        "first_question_at": first_question_at,
+    }
+
+
+def format_usage_stats(stats):
+    """[compute_usage_stats]'in sonucunu okunabilir duz metne cevirir -
+    Kullanım İstatistikleri penceresinde gosterilir."""
+    first_question = (
+        stats["first_question_at"].strftime("%Y-%m-%d")
+        if stats["first_question_at"]
+        else "-"
+    )
+    lines = [
+        f"Toplam soru: {stats['total_questions']}",
+        f"Bugün sorulan: {stats['questions_today']}",
+        f"Bu hafta sorulan: {stats['questions_this_week']}",
+        f"Favori kayıt: {stats['favorite_count']}",
+        f"Hatalı yanıt: {stats['error_count']}",
+        f"Bildirim: {stats['notification_count']}",
+        f"Otomasyon kuralı: {stats['automation_rule_count']}",
+        f"Özel komut: {stats['custom_command_count']}",
+        f"Bağlanan cihaz: {stats['connected_device_count']}",
+        f"İlk soru tarihi: {first_question}",
+    ]
+    return "\n".join(lines)
+
+
 def merge_history_entries(existing_entries, new_entries):
     """[new_entries] icindeki (telefondan gelen) kayitlari [existing_entries]
     listesine yerinde (in-place) ekler; (time, question, answer) ucluesu
@@ -2418,6 +2489,21 @@ class CatCharacter(QWidget):
         if box.clickedButton() == clear_button:
             self.notifications.clear()
 
+    def _show_usage_stats(self):
+        self._register_activity()
+        stats = compute_usage_stats(
+            self.history.entries,
+            self.notifications.entries,
+            self._automation_rules(),
+            self._custom_commands(),
+            self.remote_server.recent_connections,
+            datetime.now(),
+        )
+        box = QMessageBox(self)
+        box.setWindowTitle("Kullanım İstatistikleri")
+        box.setText(format_usage_stats(stats))
+        box.exec()
+
     # -- hatirlatici --------------------------------------------------------
 
     def _create_reminder(self):
@@ -3025,6 +3111,10 @@ class CatCharacter(QWidget):
         notification_history_action = QAction("Bildirim Gecmisi", self)
         notification_history_action.triggered.connect(self._show_notification_history)
         menu.addAction(notification_history_action)
+
+        usage_stats_action = QAction("Kullanım İstatistikleri", self)
+        usage_stats_action.triggered.connect(self._show_usage_stats)
+        menu.addAction(usage_stats_action)
 
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)

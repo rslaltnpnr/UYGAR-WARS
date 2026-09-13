@@ -16,12 +16,14 @@ from main import (
     _parse_version,
     append_access_log,
     build_pairing_uri,
+    compute_usage_stats,
     describe_automation_rule,
     find_release_with_asset,
     format_access_log_line,
     format_automation_rules,
     format_history_entries,
     format_notifications,
+    format_usage_stats,
     is_newer_version,
     is_url_safe_to_open,
     merge_history_entries,
@@ -213,6 +215,99 @@ class TestBuildPairingUri:
         uri = build_pairing_uri("10.0.0.1", 8765, "111111", "AA:BB & CC")
         assert "AA:BB & CC" not in uri
         assert "%26" in uri or "+" in uri or "%20" in uri
+
+
+class TestComputeUsageStats:
+    def test_bos_verilerle_tum_sayaclar_sifir(self):
+        stats = compute_usage_stats([], [], [], [], {}, datetime(2026, 1, 10))
+        assert stats["total_questions"] == 0
+        assert stats["questions_today"] == 0
+        assert stats["questions_this_week"] == 0
+        assert stats["error_count"] == 0
+        assert stats["favorite_count"] == 0
+        assert stats["notification_count"] == 0
+        assert stats["automation_rule_count"] == 0
+        assert stats["custom_command_count"] == 0
+        assert stats["connected_device_count"] == 0
+        assert stats["first_question_at"] is None
+
+    def test_toplam_soru_hatalilar_dahil_sayilir(self):
+        now = datetime(2026, 1, 10, 12, 0)
+        entries = [
+            {"time": "2026-01-10 11:00", "question": "q1", "answer": "a1", "is_error": False},
+            {"time": "2026-01-10 11:30", "question": "q2", "answer": "hata", "is_error": True},
+        ]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        assert stats["total_questions"] == 2
+        assert stats["error_count"] == 1
+
+    def test_bugun_ve_bu_hafta_sayaclari_dogru_ayrilir(self):
+        now = datetime(2026, 1, 10, 12, 0)
+        entries = [
+            {"time": "2026-01-10 09:00", "question": "bugun", "answer": "a", "is_error": False},
+            {"time": "2026-01-07 09:00", "question": "hafta-ici", "answer": "a", "is_error": False},
+            {"time": "2025-12-01 09:00", "question": "eski", "answer": "a", "is_error": False},
+        ]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        assert stats["questions_today"] == 1
+        assert stats["questions_this_week"] == 2
+        assert stats["total_questions"] == 3
+
+    def test_favori_sayisi_dogru(self):
+        now = datetime(2026, 1, 10)
+        entries = [
+            {"time": "2026-01-01 10:00", "question": "q1", "answer": "a1", "favorite": True},
+            {"time": "2026-01-01 10:00", "question": "q2", "answer": "a2", "favorite": False},
+        ]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        assert stats["favorite_count"] == 1
+
+    def test_bozuk_zaman_damgasi_atlanir(self):
+        now = datetime(2026, 1, 10)
+        entries = [{"time": "gecersiz", "question": "q1", "answer": "a1"}]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        assert stats["total_questions"] == 1
+        assert stats["questions_today"] == 0
+        assert stats["first_question_at"] is None
+
+    def test_en_eski_kayit_first_question_at_olarak_donduruluyor(self):
+        now = datetime(2026, 1, 10)
+        entries = [
+            {"time": "2026-01-05 10:00", "question": "yeni", "answer": "a"},
+            {"time": "2025-01-01 10:00", "question": "eski", "answer": "a"},
+        ]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        assert stats["first_question_at"] == datetime(2025, 1, 1, 10, 0)
+
+    def test_diger_listelerin_uzunluklari_dogrudan_sayilir(self):
+        now = datetime(2026, 1, 10)
+        stats = compute_usage_stats(
+            [],
+            [{"time": "x", "title": "t", "message": "m"}] * 2,
+            [{"id": "1"}, {"id": "2"}, {"id": "3"}],
+            [{"id": "1"}],
+            {"1.2.3.4": {}, "5.6.7.8": {}},
+            now,
+        )
+        assert stats["notification_count"] == 2
+        assert stats["automation_rule_count"] == 3
+        assert stats["custom_command_count"] == 1
+        assert stats["connected_device_count"] == 2
+
+
+class TestFormatUsageStats:
+    def test_ilk_soru_yoksa_tire_gosterilir(self):
+        stats = compute_usage_stats([], [], [], [], {}, datetime(2026, 1, 10))
+        text = format_usage_stats(stats)
+        assert "İlk soru tarihi: -" in text
+
+    def test_sayaclar_metinde_gorunur(self):
+        now = datetime(2026, 1, 10)
+        entries = [{"time": "2026-01-10 09:00", "question": "q", "answer": "a"}]
+        stats = compute_usage_stats(entries, [], [], [], {}, now)
+        text = format_usage_stats(stats)
+        assert "Toplam soru: 1" in text
+        assert "Bugün sorulan: 1" in text
 
 
 class TestMergeHistoryEntries:
