@@ -26,7 +26,10 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   var olan kayitlar tekrar eklenmez). Panelde ayrica arama (büyüteç
   ikonu), favorileme (her kaydin yanindaki yildiz, ve sadece favorileri
   gosteren yildiz filtresi - sadece bu cihazda saklanir, senkron
-  edilmez) ve disa aktarma (paylas ikonu, `.txt` olarak) bulunur.
+  edilmez) ve disa aktarma (paylas ikonu, `.txt` olarak) bulunur. Soru
+  kutusunun yanindaki simsek ikonuyla ("Hazır Sorular") birkac hazir
+  soruyu secip soru kutusuna doldurabilirsiniz - masaustu suruumundeki
+  ayni ozelligin mobil karsiligi.
 - **Hatirlatici** (alarm ikonu): "X dakika sonra hatirlat" seklinde tekil
   bir yerel bildirim kurabilirsiniz - bulut/Firebase gerekmez, tamamen
   cihaz uzerinde calisir. Android 13+ icin bildirim izni ister.
