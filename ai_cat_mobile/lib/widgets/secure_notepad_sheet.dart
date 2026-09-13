@@ -34,6 +34,10 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
   List<SecureNote> _notes = [];
   String? _error;
   bool _busy = false;
+  // null: tum notlar gosterilir. Bos oldugunda (yeni kurulan defter, hicbir
+  // notta etiket yokken) filtre satiri hic gosterilmez, bu yuzden bu deger
+  // her zaman gecerli bir etiket olur ya da hic secilmemis olur.
+  String? _activeTagFilter;
 
   @override
   void initState() {
@@ -153,6 +157,8 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
     if (key == null) return;
     final titleController = TextEditingController(text: existing?.title ?? '');
     final bodyController = TextEditingController(text: existing?.body ?? '');
+    final tagsController =
+        TextEditingController(text: (existing?.tags ?? const []).join(', '));
 
     final saved = await showDialog<bool>(
       context: context,
@@ -174,6 +180,14 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
                 maxLines: 6,
                 decoration: const InputDecoration(labelText: 'Not'),
               ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: tagsController,
+                decoration: const InputDecoration(
+                  labelText: 'Etiketler (virgülle ayırın)',
+                  hintText: 'iş, önemli',
+                ),
+              ),
             ],
           ),
         ),
@@ -194,6 +208,7 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
     final title = titleController.text.trim();
     final body = bodyController.text.trim();
     if (title.isEmpty && body.isEmpty) return;
+    final tags = parseTagsInput(tagsController.text);
 
     final now = DateTime.now();
     setState(() {
@@ -205,6 +220,7 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
             title: title,
             body: body,
             updatedAt: now,
+            tags: tags,
           ),
         ];
       } else {
@@ -212,10 +228,21 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
             .map(
               (n) => n.id == existing.id
                   ? SecureNote(
-                      id: n.id, title: title, body: body, updatedAt: now)
+                      id: n.id,
+                      title: title,
+                      body: body,
+                      updatedAt: now,
+                      tags: tags,
+                    )
                   : n,
             )
             .toList();
+        // Silinen bir etiket artik hicbir notta kullanilmiyor olabilir -
+        // filtre gecerliligini kontrol et (bkz. _buildNotesList).
+        if (_activeTagFilter != null &&
+            !_notes.any((n) => n.tags.contains(_activeTagFilter))) {
+          _activeTagFilter = null;
+        }
       }
     });
     await _service.save(key, _notes);
@@ -224,7 +251,13 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
   Future<void> _deleteNote(SecureNote note) async {
     final key = _key;
     if (key == null) return;
-    setState(() => _notes = _notes.where((n) => n.id != note.id).toList());
+    setState(() {
+      _notes = _notes.where((n) => n.id != note.id).toList();
+      if (_activeTagFilter != null &&
+          !_notes.any((n) => n.tags.contains(_activeTagFilter))) {
+        _activeTagFilter = null;
+      }
+    });
     await _service.save(key, _notes);
   }
 
@@ -401,34 +434,97 @@ class _SecureNotepadSheetState extends State<SecureNotepadSheet> {
         ),
       );
     }
-    final sorted = [..._notes]
+    final allTags = <String>{};
+    for (final note in _notes) {
+      allTags.addAll(note.tags);
+    }
+    final visibleNotes = _activeTagFilter == null
+        ? _notes
+        : _notes.where((n) => n.tags.contains(_activeTagFilter)).toList();
+    final sorted = [...visibleNotes]
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-    return ListView.builder(
-      controller: scrollController,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: sorted.length,
-      itemBuilder: (context, index) {
-        final note = sorted[index];
-        return ListTile(
-          title: Text(
-            note.title.isEmpty ? '(başlıksız)' : note.title,
-            style: TextStyle(color: colors.textPrimary),
-            overflow: TextOverflow.ellipsis,
+
+    return Column(
+      children: [
+        if (allTags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              height: 32,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  for (final tag in allTags)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: FilterChip(
+                        label: Text(tag),
+                        selected: _activeTagFilter == tag,
+                        onSelected: (selected) {
+                          setState(
+                            () => _activeTagFilter = selected ? tag : null,
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-          subtitle: Text(
-            note.body,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.textMuted),
-          ),
-          onTap: () => _addOrEditNote(existing: note),
-          trailing: IconButton(
-            icon: Icon(Icons.delete_outline, color: colors.textMuted),
-            tooltip: 'Notu Sil',
-            onPressed: () => _deleteNote(note),
-          ),
-        );
-      },
+        Expanded(
+          child: sorted.isEmpty
+              ? Center(
+                  child: Text(
+                    'Bu etikette not yok.',
+                    style: TextStyle(color: colors.textMuted),
+                  ),
+                )
+              : ListView.builder(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: sorted.length,
+                  itemBuilder: (context, index) {
+                    final note = sorted[index];
+                    return ListTile(
+                      title: Text(
+                        note.title.isEmpty ? '(başlıksız)' : note.title,
+                        style: TextStyle(color: colors.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            note.body,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: colors.textMuted),
+                          ),
+                          if (note.tags.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                note.tags.map((t) => '#$t').join('  '),
+                                style: TextStyle(
+                                  color: colors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      onTap: () => _addOrEditNote(existing: note),
+                      trailing: IconButton(
+                        icon: Icon(Icons.delete_outline,
+                            color: colors.textMuted),
+                        tooltip: 'Notu Sil',
+                        onPressed: () => _deleteNote(note),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

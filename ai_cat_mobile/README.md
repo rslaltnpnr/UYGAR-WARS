@@ -42,7 +42,9 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   da "Kilitle" ile elle) defter tekrar sifre istemeye doner. Sifreyi
   unutursanız notlari kurtarmanin bir yolu yoktur (bu, gercekten sifreli
   olmanin bedelidir); "Şifremi unuttum" secenegi tum notlari silip
-  sifirdan yeni bir sifreyle baslamanizi saglar.
+  sifirdan yeni bir sifreyle baslamanizi saglar. Her nota virgulle
+  ayrilmis etiketler ("iş, önemli" gibi) eklenebilir; not listesinin
+  ustundeki etiket cipleriyle tek bir etikete gore filtrelenebilir.
 - **Kullanım İstatistikleri** (grafik ikonu): toplam/bugün/bu hafta sorulan
   soru sayısı, favori ve hatalı yanıt sayısı, bildirim/makro/eşleşik
   bilgisayar/kuyrukta bekleyen komut sayısı ve ilk soru tarihi gibi
