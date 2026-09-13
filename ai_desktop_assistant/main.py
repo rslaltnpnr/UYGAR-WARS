@@ -216,6 +216,9 @@ DEFAULT_CONFIG = {
     "auto_backup_enabled": True,
     "auto_backup_last": None,
     "context_aware_enabled": True,
+    "auto_theme_enabled": False,
+    "auto_theme_day_start": "07:00",
+    "auto_theme_night_start": "19:00",
 }
 
 AUTO_BACKUP_PREFIX = "otomatik-yedek-"
@@ -794,6 +797,23 @@ def parse_hh_mm(text):
     if not (0 <= hour <= 23 and 0 <= minute <= 59):
         return None
     return f"{hour:02d}:{minute:02d}"
+
+
+def resolve_auto_theme_mode(now, day_start="07:00", night_start="19:00"):
+    """[now] (bir datetime) icin "light" mi "dark" mi kullanilmasi
+    gerektigini dondurur - [day_start]'ta gunduz temasina, [night_start]'ta
+    gece temasina gecilir. Ikisi de "SS:DD" bicimindedir (parse_hh_mm ile
+    dogrulanir, gecersizse varsayilana duser). "HH:MM" bicimindeki
+    dizeler sozluksel olarak da saat sirasina gore karsilastirilabildigi
+    icin datetime nesnesine cevirmeye gerek yok."""
+    day_start = parse_hh_mm(day_start) or "07:00"
+    night_start = parse_hh_mm(night_start) or "19:00"
+    current = now.strftime("%H:%M")
+    if day_start <= night_start:
+        return "light" if day_start <= current < night_start else "dark"
+    # gunduz araligi gece yarisini gecer (orn. gunduz baslangici gece
+    # baslangicindan sonra) - nadiren kullanilir ama tutarli olmali.
+    return "light" if current >= day_start or current < night_start else "dark"
 
 
 def should_fire_rule(rule, now, idle_seconds):
@@ -3053,6 +3073,24 @@ class CatCharacter(QWidget):
                 changed = True
         if changed:
             self.config.set("automation_rules", rules)
+        self._apply_auto_theme_if_enabled(now)
+
+    def _apply_auto_theme_if_enabled(self, now):
+        if not self.config.get("auto_theme_enabled"):
+            return
+        desired_mode = resolve_auto_theme_mode(
+            now,
+            self.config.get("auto_theme_day_start"),
+            self.config.get("auto_theme_night_start"),
+        )
+        if desired_mode != self.config.get("theme_mode"):
+            self.config.set("theme_mode", desired_mode)
+            if self.bubble is not None:
+                self.bubble.close()
+                self.bubble = None
+            if self.history_dialog is not None:
+                self.history_dialog.close()
+                self.history_dialog = None
 
     def _perform_automation_action(self, rule):
         action_type = rule.get("action_type")
@@ -3528,6 +3566,11 @@ class CatCharacter(QWidget):
             self.history_dialog.close()
             self.history_dialog = None
 
+    def _toggle_auto_theme(self, checked):
+        self.config.set("auto_theme_enabled", checked)
+        if checked:
+            self._apply_auto_theme_if_enabled(datetime.now())
+
     # -- sag tik menusu -----------------------------------------------------
 
     def contextMenuEvent(self, event):
@@ -3649,6 +3692,12 @@ class CatCharacter(QWidget):
         light_theme_action.setChecked(self.config.get("theme_mode") == "light")
         light_theme_action.toggled.connect(self._toggle_theme)
         menu.addAction(light_theme_action)
+
+        auto_theme_action = QAction("Otomatik Gece/Gunduz Temasi", self)
+        auto_theme_action.setCheckable(True)
+        auto_theme_action.setChecked(bool(self.config.get("auto_theme_enabled")))
+        auto_theme_action.toggled.connect(self._toggle_auto_theme)
+        menu.addAction(auto_theme_action)
 
         update_action = QAction("Guncellemeleri Kontrol Et", self)
         update_action.triggered.connect(lambda: self._check_for_updates(manual=True))

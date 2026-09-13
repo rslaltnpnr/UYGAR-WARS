@@ -37,6 +37,7 @@ from main import (
     parse_hh_mm,
     prune_old_backups,
     record_connection,
+    resolve_auto_theme_mode,
     select_context_turns,
     should_fire_rule,
     should_run_auto_backup,
@@ -517,6 +518,36 @@ class TestParseHhMm:
         assert parse_hh_mm("24:00") is None
         assert parse_hh_mm("12:60") is None
         assert parse_hh_mm("-1:00") is None
+
+
+class TestResolveAutoThemeMode:
+    def test_gunduz_araliginda_light_doner(self):
+        now = datetime(2024, 1, 1, 12, 0)
+        assert resolve_auto_theme_mode(now, "07:00", "19:00") == "light"
+
+    def test_gece_araliginda_dark_doner(self):
+        now = datetime(2024, 1, 1, 22, 0)
+        assert resolve_auto_theme_mode(now, "07:00", "19:00") == "dark"
+
+    def test_gunduz_baslangicinda_tam_olarak_light_doner(self):
+        now = datetime(2024, 1, 1, 7, 0)
+        assert resolve_auto_theme_mode(now, "07:00", "19:00") == "light"
+
+    def test_gece_baslangicinda_tam_olarak_dark_doner(self):
+        now = datetime(2024, 1, 1, 19, 0)
+        assert resolve_auto_theme_mode(now, "07:00", "19:00") == "dark"
+
+    def test_gecersiz_saatler_varsayilana_duser(self):
+        now = datetime(2024, 1, 1, 12, 0)
+        assert resolve_auto_theme_mode(now, "gecersiz", "gecersiz") == "light"
+
+    def test_gunduz_araligi_gece_yarisini_geciyorsa(self):
+        # gunduz baslangici gece baslangicindan sonraysa (orn. vardiyali
+        # kullanim) - gece yarisini gecen araliktaki saatler de light olmali
+        now = datetime(2024, 1, 1, 23, 0)
+        assert resolve_auto_theme_mode(now, "20:00", "06:00") == "light"
+        now = datetime(2024, 1, 1, 10, 0)
+        assert resolve_auto_theme_mode(now, "20:00", "06:00") == "dark"
 
 
 class TestShouldFireRule:
