@@ -6,6 +6,12 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <!-- Hatirlatici bildirimlerini gosterebilmek icin (Android 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- "Ekranda Gez" kayan balonu (bkz. ScreenWatchOverlayService) icin -
+         diger uygulamalarin uzerinde cizim yapma izni, ve balonu ayakta
+         tutan on plan servisi. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <!-- Tum ag trafigi (Gemini API + bilgisayardaki "Uzaktan Kumanda"
          ozelligi) artik HTTPS uzerinden gider; duz metin (cleartext)
          trafige izin verilmiyor. -->
@@ -70,6 +76,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/cat_widget_info"/>
         </receiver>
+        <!-- "Ekranda Gez" kayan balonunu ayakta tutan on plan servisi
+             (flutter_overlay_window paketi tarafindan saglanir). Android
+             14+'ta on plan servisleri bir "tur" (type) belirtmek zorunda;
+             burada kullanicinin kendi baslattigi, standart kategorilere
+             uymayan bir "ozel kullanim" (specialUse) servisi. -->
+        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="remote_screen_watch_overlay"/>
+        </service>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

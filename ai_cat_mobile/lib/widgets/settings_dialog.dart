@@ -6,6 +6,7 @@ import '../l10n/app_strings.dart';
 import '../services/app_lock.dart';
 import '../services/auto_theme.dart';
 import '../services/backup_service.dart';
+import '../services/screen_watch_overlay_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
 import '../services/vibration_pattern.dart';
@@ -45,6 +46,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late final TextEditingController _autoThemeNightStartController;
   late VibrationPatternOption _vibrationPattern;
   late String _languageCode;
+  late bool _screenWatchOverlayEnabled;
+  final _screenWatchOverlayService = ScreenWatchOverlayService();
   bool _obscureKey = true;
 
   @override
@@ -66,6 +69,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
         TextEditingController(text: widget.settings.autoThemeNightStart);
     _vibrationPattern = widget.settings.notificationVibrationPattern;
     _languageCode = widget.settings.languageCode;
+    _screenWatchOverlayEnabled = widget.settings.screenWatchOverlayEnabled;
   }
 
   @override
@@ -183,6 +187,43 @@ class _SettingsDialogState extends State<SettingsDialog> {
         ),
       ),
     );
+  }
+
+  /// [enable] true: sistem izni yoksa Android'in "diger uygulamalarin
+  /// uzerinde goster" ayar sayfasini acar ve kullanicinin izin vermesini
+  /// bekler; izin verilmezse balon acilmaz ve ayar kapali kalir. false:
+  /// balonu kapatir. Balonun kendisi (bkz. ScreenWatchOverlayApp) ayri bir
+  /// Flutter motorunda calisir, bu yuzden burada yalnizca goster/kapat
+  /// cagirilir - ekran boyutu icin bir BuildContext gerekir, o da bu
+  /// SettingsDialog'un context'inden alinir.
+  Future<void> _toggleScreenWatchOverlay(bool enable) async {
+    if (!enable) {
+      widget.settings.screenWatchOverlayEnabled = false;
+      await _screenWatchOverlayService.close();
+      setState(() => _screenWatchOverlayEnabled = false);
+      return;
+    }
+    var granted = await _screenWatchOverlayService.isPermissionGranted();
+    if (!granted) {
+      granted = await _screenWatchOverlayService.requestPermission();
+    }
+    if (!granted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Ekranda gezinmesi icin "diger uygulamalarin uzerinde goster" '
+            'izni gerekiyor.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final dpr = MediaQuery.of(context).devicePixelRatio;
+    await _screenWatchOverlayService.showBubble(devicePixelRatio: dpr);
+    widget.settings.screenWatchOverlayEnabled = true;
+    setState(() => _screenWatchOverlayEnabled = true);
   }
 
   Future<void> _shareBackup() async {
@@ -445,6 +486,23 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               value: _appLockEnabled,
               onChanged: (value) => _toggleAppLock(value),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                'Ekranda Gez',
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+              ),
+              subtitle: Text(
+                'Uygulama kapalıyken bile ekranda gezinen, dokununca '
+                'bilgisayarın ekranını gösterip soru sorabildiğiniz bir '
+                'balon açar. "Diğer uygulamaların üzerinde göster" izni '
+                'ister.',
+                style: TextStyle(color: colors.textMuted, fontSize: 11),
+              ),
+              value: _screenWatchOverlayEnabled,
+              onChanged: (value) => _toggleScreenWatchOverlay(value),
             ),
             Align(
               alignment: Alignment.centerLeft,

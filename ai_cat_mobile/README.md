@@ -191,6 +191,19 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   bu bilgi, uygulama acikken zaten calisan 45 saniyelik uyari
   yoklamasindan gelir (widget'in kendisi arka planda ag istegi yapmaz),
   bu yuzden uygulamayi acip kapattiginizda tazelenir.
+- **Ekranda Gez** (ayarlar penceresinde): acilirsa, uygulama kapali olsa
+  bile telefon ekraninin uzerinde surekli duran, surukleyip
+  konumlandirabileceginiz kucuk bir balon belirir - Android'in "diger
+  uygulamalarin uzerinde goster" iznini ister ve balonu ayakta tutmak
+  icin bir on plan servisi kullanir. Balona **dokununca** genisleyip bir
+  panele donusur: eslesik bilgisayarin ekran goruntusunu ~1,5 saniyede
+  bir yenileyerek (canli izleme gibi) gosterir, altinda da o ekran
+  hakkinda bir soru yazip Gemini'den (ekran goruntusuyle birlikte) cevap
+  alabileceginiz kucuk bir mesaj kutusu bulunur. Kucult (-) dugmesiyle
+  tekrar balona doner, kapat (X) ile tamamen gizlenir. Balon, ana
+  uygulamadan TAMAMEN ayri bir Flutter motorunda calisir; eslesik
+  bilgisayar bilgisini ve API anahtarini cihazda zaten saklanan ayni
+  ayarlardan okur, ayrica bir eslestirme gerektirmez.
 
 ## 1) Gerekli araclari kurun (Windows)
 
