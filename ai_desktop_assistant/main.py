@@ -2862,6 +2862,7 @@ class CatCharacter(QWidget):
         dialog = SecureNotepadDialog(self.secure_notepad_service, self)
         dialog.exec()
 
+
     # -- hatirlatici --------------------------------------------------------
 
     def _create_reminder(self):
@@ -3477,6 +3478,7 @@ class CatCharacter(QWidget):
         secure_notepad_action = QAction("Şifreli Not Defteri", self)
         secure_notepad_action.triggered.connect(self._show_secure_notepad)
         menu.addAction(secure_notepad_action)
+
 
         reminder_action = QAction("Hatirlatici Kur", self)
         reminder_action.triggered.connect(self._create_reminder)
