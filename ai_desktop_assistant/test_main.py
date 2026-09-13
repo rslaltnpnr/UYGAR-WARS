@@ -14,14 +14,18 @@ from datetime import datetime, timedelta
 import pytest
 
 from main import (
+    ConfigManager,
     DEFAULT_QUICK_QUESTIONS,
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
+    PROFILE_EXPORT_KEYS,
     ScreenshotHistoryLog,
     SecureNotepadService,
     WrongPasswordError,
     _parse_version,
     append_access_log,
+    apply_settings_profile,
     build_pairing_uri,
+    build_settings_profile,
     compute_usage_stats,
     describe_automation_rule,
     find_release_with_asset,
@@ -713,6 +717,63 @@ class TestFormatScreenshotHistory:
         lines = format_screenshot_history(entries).split("\n")
         assert "Telefon (b)" in lines[0]
         assert "Telefon (a)" in lines[1]
+
+
+class TestBuildSettingsProfile:
+    def test_yalnizca_bilinen_anahtarlari_alir(self):
+        config_data = dict(
+            {key: "x" for key in PROFILE_EXPORT_KEYS},
+            gemini_api_key="gizli-anahtar",
+            remote_pin="123456",
+            pos_x=100,
+        )
+        profile = build_settings_profile(config_data)
+        assert set(profile.keys()) == set(PROFILE_EXPORT_KEYS)
+        assert "gemini_api_key" not in profile
+        assert "remote_pin" not in profile
+        assert "pos_x" not in profile
+
+    def test_eksik_anahtarlari_atlar(self):
+        profile = build_settings_profile({"character_name": "Fuff"})
+        assert profile == {"character_name": "Fuff"}
+
+
+class TestApplySettingsProfile:
+    def _config(self, tmp_path):
+        return ConfigManager(str(tmp_path / "config.json"))
+
+    def test_bilinen_anahtarlar_uygulanir(self, tmp_path):
+        config = self._config(tmp_path)
+        applied = apply_settings_profile(config, {"character_name": "Pati", "scale_percent": 150})
+        assert config.get("character_name") == "Pati"
+        assert config.get("scale_percent") == 150
+        assert set(applied) == {"character_name", "scale_percent"}
+
+    def test_bilinmeyen_anahtarlar_yok_sayilir(self, tmp_path):
+        config = self._config(tmp_path)
+        original_pin = config.get("remote_pin")
+        applied = apply_settings_profile(
+            config, {"gemini_api_key": "gizli", "remote_pin": "000000", "unknown_key": "x"}
+        )
+        assert applied == []
+        assert config.get("gemini_api_key") == ""
+        assert config.get("remote_pin") == original_pin
+
+    def test_dict_olmayan_veri_hicbir_sey_uygulamaz(self, tmp_path):
+        config = self._config(tmp_path)
+        assert apply_settings_profile(config, ["not", "a", "dict"]) == []
+        assert apply_settings_profile(config, None) == []
+
+    def test_disa_ice_aktarma_yuvarlanabilir(self, tmp_path):
+        source = ConfigManager(str(tmp_path / "source.json"))
+        source.set("character_name", "Pati")
+        source.set("theme_mode", "light")
+        profile = build_settings_profile(source.data)
+
+        dest = ConfigManager(str(tmp_path / "dest.json"))
+        apply_settings_profile(dest, profile)
+        assert dest.get("character_name") == "Pati"
+        assert dest.get("theme_mode") == "light"
 
 
 class TestSecureNotepadService:

@@ -167,6 +167,14 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Ayarları Dışa/İçe Aktarma**: sag tik menusundeki "Ayarlari Disa
+  Aktar..."/"Ayarlari Ice Aktar..." ile karakter adi, olcek, model, kaplama,
+  tema ve otomasyon tercihleri gibi kisisellestirme ayarlarinizi bir JSON
+  "profil" dosyasina kaydedip baska bir bilgisayarda (ya da yeniden
+  kurulumda) geri yukleyebilirsiniz - mevcut "Yedek Al/Yedekten Geri
+  Yukle"nin aksine bu dosya Gemini API anahtarinizi, uzaktan kumanda
+  PIN'inizi ya da pencere konumunuzu icermez, bu yuzden baskalariyla
+  paylasmak guvenlidir.
 - **Otomatik Gece/Gündüz Teması**: sag tik menusundeki "Otomatik Gece/
   Gunduz Temasi" isaretlenirse tema, gunun saatine gore kendiliginden
   degisir (varsayilan olarak 07:00'de acik, 19:00'da koyu tema) -
