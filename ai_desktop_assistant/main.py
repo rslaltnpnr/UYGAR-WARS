@@ -221,6 +221,24 @@ DEFAULT_CONFIG = {
     "auto_theme_night_start": "19:00",
 }
 
+# "Ayarlari Disa/Ice Aktar" ile paylasilabilen kisisellestirme ayarlari -
+# _export_backup/_import_backup'taki tam yedeklemenin aksine, gizli
+# bilgi (gemini_api_key, remote_pin) ya da makineye ozgu durum
+# (pos_x/pos_y, auto_backup_last, gemini_request_date/count) icermez,
+# boylece baskalariyla guvenle paylasilabilir.
+PROFILE_EXPORT_KEYS = [
+    "character_name",
+    "scale_percent",
+    "model_name",
+    "skin",
+    "theme_mode",
+    "auto_backup_enabled",
+    "context_aware_enabled",
+    "auto_theme_enabled",
+    "auto_theme_day_start",
+    "auto_theme_night_start",
+]
+
 AUTO_BACKUP_PREFIX = "otomatik-yedek-"
 AUTO_BACKUP_INTERVAL_DAYS = 1
 AUTO_BACKUP_MAX_COUNT = 7
@@ -886,6 +904,30 @@ def format_automation_rules(rules):
     for i, rule in enumerate(rules, start=1):
         lines.append(f"{i}. {describe_automation_rule(rule)}")
     return "\n".join(lines)
+
+
+def build_settings_profile(config_data):
+    """[config_data] (ConfigManager.data) icinden yalnizca PROFILE_EXPORT_
+    KEYS'teki (gizli/makineye ozgu olmayan) anahtarlari alan bir dict
+    dondurur - "Ayarlari Disa Aktar" bunu oldugu gibi JSON'a yazar."""
+    return {key: config_data[key] for key in PROFILE_EXPORT_KEYS if key in config_data}
+
+
+def apply_settings_profile(config, profile_data):
+    """[profile_data] (build_settings_profile ile uretilmis ya da elle
+    yazilmis bir dict) icindeki PROFILE_EXPORT_KEYS anahtarlarini
+    [config]'e (bir ConfigManager) yazar, geri kalanini yok sayar - boylece
+    baska bir surumden ya da elle duzenlenmis, bilinmeyen ekstra anahtar
+    iceren bir dosya bile guvenle ice aktarilabilir. Uygulanan anahtarlarin
+    listesini dondurur."""
+    applied = []
+    if not isinstance(profile_data, dict):
+        return applied
+    for key in PROFILE_EXPORT_KEYS:
+        if key in profile_data:
+            config.set(key, profile_data[key])
+            applied.append(key)
+    return applied
 
 
 def prune_old_backups(directory, keep_count):
@@ -3403,6 +3445,52 @@ class CatCharacter(QWidget):
             "uygulamayi yeniden baslatmaniz onerilir.",
         )
 
+    def _export_settings_profile(self):
+        self._register_activity()
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Ayarlari Disa Aktar", "ai-kedi-asistani-profil.json", "JSON Dosyalari (*.json)"
+        )
+        if not path:
+            return
+        profile = build_settings_profile(self.config.data)
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(profile, f, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            QMessageBox.warning(self, "Disa Aktarilamadi", f"Dosya kaydedilemedi: {exc}")
+            return
+        QMessageBox.information(
+            self,
+            "Ayarlar Disa Aktarildi",
+            f"Ayarlar kaydedildi:\n{path}\n\n"
+            "Bu dosya API anahtarinizi ya da PIN'inizi icermez, baskalariyla "
+            "paylasabilirsiniz.",
+        )
+
+    def _import_settings_profile(self):
+        self._register_activity()
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Ayarlari Ice Aktar", "", "JSON Dosyalari (*.json)"
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                profile_data = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            QMessageBox.warning(self, "Ice Aktarma Basarisiz", f"Dosya okunamadi: {exc}")
+            return
+        applied = apply_settings_profile(self.config, profile_data)
+        if not applied:
+            QMessageBox.warning(self, "Ice Aktarma Basarisiz", "Dosyada taninan bir ayar bulunamadi.")
+            return
+        QMessageBox.information(
+            self,
+            "Ayarlar Ice Aktarildi",
+            f"{len(applied)} ayar guncellendi. Degisikliklerin tam olarak yansimasi "
+            "icin uygulamayi yeniden baslatmaniz onerilir.",
+        )
+
     # -- hakkinda -------------------------------------------------------
 
     def _show_about(self):
@@ -3712,6 +3800,14 @@ class CatCharacter(QWidget):
         restore_action = QAction("Yedekten Geri Yukle...", self)
         restore_action.triggered.connect(self._import_backup)
         menu.addAction(restore_action)
+
+        export_profile_action = QAction("Ayarlari Disa Aktar...", self)
+        export_profile_action.triggered.connect(self._export_settings_profile)
+        menu.addAction(export_profile_action)
+
+        import_profile_action = QAction("Ayarlari Ice Aktar...", self)
+        import_profile_action.triggered.connect(self._import_settings_profile)
+        menu.addAction(import_profile_action)
 
         auto_backup_action = QAction("Otomatik Yedekleme (Gunluk)", self)
         auto_backup_action.setCheckable(True)
