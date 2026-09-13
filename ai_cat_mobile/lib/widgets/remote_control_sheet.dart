@@ -4,6 +4,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../models/command_macro.dart';
 import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
+import '../screens/automation_rules_screen.dart';
 import '../screens/qr_pairing_scanner_screen.dart';
 import '../services/command_queue_service.dart';
 import '../services/macro_service.dart';
@@ -766,6 +767,21 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     }
   }
 
+  Future<void> _openAutomationRules() async {
+    final profile = _activeProfile;
+    if (_busy || profile == null) return;
+    _saveConnectionInfo();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => AutomationRulesScreen(
+          remoteService: _service,
+          profile: profile,
+          onFingerprintUpdated: _updateActiveFingerprint,
+        ),
+      ),
+    );
+  }
+
   Future<void> _pushClipboard() async {
     if (_busy || _activeProfile == null) return;
     final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
@@ -1166,6 +1182,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                     onPressed: _busy ? null : _takeScreenshot,
                     icon: const Icon(Icons.screenshot_monitor),
                     label: const Text('Ekran Görüntüsü Al'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _busy || _activeProfile == null ? null : _openAutomationRules,
+                    icon: const Icon(Icons.rule),
+                    label: const Text('Otomasyon Kuralları'),
                   ),
                   Divider(color: colors.divider, height: 32),
                   Text(
