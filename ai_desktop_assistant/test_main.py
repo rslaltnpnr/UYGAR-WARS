@@ -15,6 +15,7 @@ from main import (
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     _parse_version,
     append_access_log,
+    build_pairing_uri,
     describe_automation_rule,
     find_release_with_asset,
     format_access_log_line,
@@ -193,6 +194,25 @@ class TestValidateCustomCommand:
         # Hem isim hem baglanti gecersizse, once isim hatasi donmeli.
         error = validate_custom_command("", "")
         assert error == "Bir isim yaz."
+
+
+class TestBuildPairingUri:
+    def test_semayi_ve_yolu_icerir(self):
+        uri = build_pairing_uri("192.168.1.5", 8765, "123456", "AA:BB")
+        assert uri.startswith("aikedi://pair?")
+
+    def test_tum_alanlar_sorgu_dizesinde_bulunur(self):
+        uri = build_pairing_uri("192.168.1.5", 8765, "123456", "AA:BB:CC")
+        assert "ip=192.168.1.5" in uri
+        assert "port=8765" in uri
+        assert "pin=123456" in uri
+        # ':' url-encode edilir (%3A).
+        assert "fp=AA%3ABB%3ACC" in uri
+
+    def test_ozel_karakterler_dogru_kacirilir(self):
+        uri = build_pairing_uri("10.0.0.1", 8765, "111111", "AA:BB & CC")
+        assert "AA:BB & CC" not in uri
+        assert "%26" in uri or "+" in uri or "%20" in uri
 
 
 class TestMergeHistoryEntries:
