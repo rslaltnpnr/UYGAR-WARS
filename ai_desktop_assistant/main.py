@@ -216,6 +216,7 @@ DEFAULT_CONFIG = {
     "auto_backup_enabled": True,
     "auto_backup_last": None,
     "context_aware_enabled": True,
+    "personality": "Varsayilan",
     "auto_theme_enabled": False,
     "auto_theme_day_start": "07:00",
     "auto_theme_night_start": "19:00",
@@ -231,6 +232,7 @@ PROFILE_EXPORT_KEYS = [
     "scale_percent",
     "model_name",
     "skin",
+    "personality",
     "theme_mode",
     "auto_backup_enabled",
     "context_aware_enabled",
@@ -1911,6 +1913,35 @@ def register_global_hotkey(callback):
     return signal_holder  # referansi canli tutmak icin cagirana dondurulur
 
 
+# "Kisilik" sag tik menusunden hizlica secilir; her biri persona metnine
+# eklenen kisa bir ton tarifi - kedinin kimligini (isim) degil, nasil
+# konustugunu degistirir. Anahtarlar menude gorundugu sirayla tutulur.
+PERSONALITY_PRESETS = {
+    "Varsayilan": "Kisa, samimi ve yardimsever konus.",
+    "Sakaci": "Esprili ve nese dolu konus, uygun oldugunda kucuk sakalar yap.",
+    "Ciddi": "Kisa, dogrudan ve profesyonel konus, gereksiz sohbetten kacin.",
+    "Nazik": "Cok kibar, sabirli ve tesvik edici bir dille konus.",
+    "Enerjik": "Cosku dolu, hareketli ve motive edici bir dille konus.",
+}
+
+
+def build_persona_prompt(character_name, personality):
+    """GeminiWorker'in Gemini'ye gonderdigi system_instruction'ini
+    uretir - kimlik (character_name, her zaman sabit) ile ton
+    (PERSONALITY_PRESETS[personality], kullanicinin sectigi) ayri
+    tutulur, boylece kisilik degistirmek asistanin kim oldugunu degil
+    yalnizca nasil konustugunu etkiler. Bilinmeyen bir personality
+    "Varsayilan"a duser."""
+    tone = PERSONALITY_PRESETS.get(personality, PERSONALITY_PRESETS["Varsayilan"])
+    return (
+        f"Senin adin '{character_name}'. Kullanicinin masaustunde yasayan, "
+        "onun ekranini gorebilen sevimli bir kedi yapay zeka asistanisin. "
+        "Kendini her zaman bu isimle tanit; Google tarafindan gelistirilmis "
+        "bir dil modeli oldugunu veya hangi sirkete/modele ait oldugunu "
+        f"asla soyleme. {tone}"
+    )
+
+
 # --------------------------------------------------------------------------
 # Ekran goruntusu + Gemini istegini arka planda yapan thread
 # --------------------------------------------------------------------------
@@ -1925,6 +1956,7 @@ class GeminiWorker(QThread):
         model_name,
         question,
         character_name,
+        personality="Varsayilan",
         history_context=None,
         parent=None,
     ):
@@ -1933,6 +1965,7 @@ class GeminiWorker(QThread):
         self.model_name = model_name
         self.question = question
         self.character_name = character_name
+        self.personality = personality
         # Onceki soru-cevaplar (bkz. CONTEXT_HISTORY_TURNS) - "ona gore",
         # "bir de sunu" gibi takip sorularinin baglamini korumak icin
         # modele ayri konusma turleri olarak gonderilir.
@@ -1961,13 +1994,7 @@ class GeminiWorker(QThread):
             )
             return
 
-        persona = (
-            f"Senin adin '{self.character_name}'. Kullanicinin masaustunde yasayan, "
-            "onun ekranini gorebilen sevimli bir kedi yapay zeka asistanisin. "
-            "Kendini her zaman bu isimle tanit; Google tarafindan gelistirilmis "
-            "bir dil modeli oldugunu veya hangi sirkete/modele ait oldugunu "
-            "asla soyleme. Kisa, samimi ve yardimsever konus."
-        )
+        persona = build_persona_prompt(self.character_name, self.personality)
         # Onceki turler sadece metin olarak (ekran goruntusu her seferinde
         # yeniden gonderilir, o an gecerli olan tek goruntu budur) - boylece
         # model "bahsettigim..." gibi bir onceki soruya gonderme yapan
@@ -2803,6 +2830,7 @@ class CatCharacter(QWidget):
             self.config.get("model_name"),
             question,
             self.config.get("character_name"),
+            personality=self.config.get("personality"),
             history_context=self._recent_context(),
         )
         self.worker.finished_ok.connect(self._on_answer)
@@ -3697,6 +3725,20 @@ class CatCharacter(QWidget):
                 skin_group.addAction(action)
                 skin_menu.addAction(action)
 
+        personality_menu = menu.addMenu("Kisilik")
+        personality_group = QActionGroup(self)
+        personality_group.setExclusive(True)
+        current_personality = self.config.get("personality")
+        for personality_name in PERSONALITY_PRESETS:
+            action = QAction(personality_name, self)
+            action.setCheckable(True)
+            action.setChecked(personality_name == current_personality)
+            action.triggered.connect(
+                lambda checked, p=personality_name: self._set_personality(p)
+            )
+            personality_group.addAction(action)
+            personality_menu.addAction(action)
+
         rename_action = QAction("Kediye Isim Ver", self)
         rename_action.triggered.connect(self._rename_character)
         menu.addAction(rename_action)
@@ -3862,6 +3904,10 @@ class CatCharacter(QWidget):
         self.move(new_x, new_y)
         self.config.set("pos_x", new_x)
         self.config.set("pos_y", new_y)
+
+    def _set_personality(self, personality_name):
+        self._register_activity()
+        self.config.set("personality", personality_name)
 
     def _rename_character(self):
         current = self.config.get("character_name")

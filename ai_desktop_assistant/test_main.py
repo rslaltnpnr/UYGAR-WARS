@@ -17,6 +17,7 @@ from main import (
     ConfigManager,
     DEFAULT_QUICK_QUESTIONS,
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
+    PERSONALITY_PRESETS,
     PROFILE_EXPORT_KEYS,
     ScreenshotHistoryLog,
     SecureNotepadService,
@@ -25,6 +26,7 @@ from main import (
     append_access_log,
     apply_settings_profile,
     build_pairing_uri,
+    build_persona_prompt,
     build_settings_profile,
     compute_usage_stats,
     describe_automation_rule,
@@ -717,6 +719,28 @@ class TestFormatScreenshotHistory:
         lines = format_screenshot_history(entries).split("\n")
         assert "Telefon (b)" in lines[0]
         assert "Telefon (a)" in lines[1]
+
+
+class TestBuildPersonaPrompt:
+    def test_karakter_adi_yer_alir(self):
+        assert "Fuff" in build_persona_prompt("Fuff", "Varsayilan")
+
+    def test_her_kisilik_farkli_ton_uretir(self):
+        prompts = {
+            personality: build_persona_prompt("Fuff", personality)
+            for personality in PERSONALITY_PRESETS
+        }
+        assert len(set(prompts.values())) == len(PERSONALITY_PRESETS)
+
+    def test_bilinmeyen_kisilik_varsayilana_duser(self):
+        assert build_persona_prompt("Fuff", "olmayan-kisilik") == build_persona_prompt(
+            "Fuff", "Varsayilan"
+        )
+
+    def test_model_kimligi_asla_soylenmez_talimati_her_zaman_var(self):
+        for personality in PERSONALITY_PRESETS:
+            prompt = build_persona_prompt("Fuff", personality)
+            assert "asla soyleme" in prompt
 
 
 class TestBuildSettingsProfile:
