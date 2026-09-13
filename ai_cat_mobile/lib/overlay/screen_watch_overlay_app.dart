@@ -1,7 +1,7 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -40,6 +40,17 @@ class _ScreenWatchOverlay extends StatefulWidget {
 }
 
 class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
+  /// flutter_overlay_window'un genel Dart API'si (`moveOverlay`/
+  /// `closeOverlay`) "x-slayer/overlay_channel" kanalini kullanir - bu
+  /// kanal SADECE ana uygulamanin Flutter motoruna kayitlidir (bkz.
+  /// FlutterOverlayWindowPlugin.onAttachedToEngine), balonun kendi (ayri)
+  /// motorunda DEGIL. Balonun motoruna kayitli olan tek kanal
+  /// "x-slayer/overlay" ("updateFlag"/"updateOverlayPosition"/
+  /// "resizeOverlay" - bkz. OverlayService.onStartCommand), bu yuzden
+  /// konumlandirma icin bu ham kanali dogrudan kullaniyoruz (paketin genel
+  /// `moveOverlay()`'i buradan calismaz).
+  static const _overlayChannel = MethodChannel('x-slayer/overlay');
+
   final _remoteService = RemoteControlService();
   final _geminiService = GeminiService();
   final _questionController = TextEditingController();
@@ -65,12 +76,24 @@ class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
   }
 
   Future<void> _expand() async {
-    final dpr = MediaQuery.of(context).devicePixelRatio;
-    final screenHeightPx = MediaQuery.of(context).size.height * dpr;
+    // MediaQuery burada balonun O ANKI (henuz kucuk, 56dp'lik) pencere
+    // boyutunu yansitir, GERCEK ekran boyutunu degil - bu yuzden
+    // View.of(context).display kullanilir (fiziksel ekrandan, o anki
+    // pencere boyutundan bagimsiz okunur).
+    final display = View.of(context).display;
+    final screenHeightDp = display.size.height / display.devicePixelRatio;
     await FlutterOverlayWindow.updateFlag(OverlayFlag.focusPointer);
+    // Balon suruklenerek ekranin herhangi bir kosesine (orn. en alta)
+    // birakilmis olabilir; panel o konumdan buyurse ekran disina tasip
+    // erisilemez hale gelir. Bu yuzden genislemeden once konum, gravity
+    // (center) etrafinda (0,0)'a - yani tam ekran ortasina - sabitlenir.
+    await _overlayChannel.invokeMethod('updateOverlayPosition', {
+      'x': 0,
+      'y': 0,
+    });
     await FlutterOverlayWindow.resizeOverlay(
       WindowSize.matchParent,
-      ScreenWatchOverlaySizes.panelHeightPx(dpr, screenHeightPx),
+      ScreenWatchOverlaySizes.panelHeightDp(screenHeightDp),
       false,
     );
     if (!mounted) return;
@@ -81,17 +104,25 @@ class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
 
   Future<void> _collapse() async {
     _stopPolling();
-    final dpr = MediaQuery.of(context).devicePixelRatio;
-    final size = ScreenWatchOverlaySizes.bubbleDiameterPx(dpr);
     await FlutterOverlayWindow.updateFlag(OverlayFlag.defaultFlag);
-    await FlutterOverlayWindow.resizeOverlay(size, size, true);
+    await FlutterOverlayWindow.resizeOverlay(
+      ScreenWatchOverlaySizes.bubbleDiameterDp,
+      ScreenWatchOverlaySizes.bubbleDiameterDp,
+      true,
+    );
     if (!mounted) return;
     setState(() => _expanded = false);
   }
 
   Future<void> _dismiss() async {
     _stopPolling();
-    await FlutterOverlayWindow.closeOverlay();
+    // FlutterOverlayWindow.closeOverlay() de moveOverlay gibi ana
+    // uygulamanin kanalini kullanir, balonun kendi motorundan
+    // CAGRILAMAZ (yukaridaki _overlayChannel notuna bakin) - o kanalda
+    // "kapat" karsiligi da yok. Bu yuzden ana uygulama (acik ve
+    // dinliyorsa - bkz. main.dart _listenForOverlayCloseRequests)
+    // araciligiyla kapatiliyor.
+    await FlutterOverlayWindow.shareData({'cmd': 'close_overlay'});
   }
 
   void _startPolling() {

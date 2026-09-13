@@ -9,21 +9,28 @@ void main() {
       expect(ScreenWatchOverlaySizes.bubbleDiameterPx(2.5), 140);
     });
 
-    test('panelHeightPx ekran yuksekliginin yuzde 55ini kullanir', () {
-      // 2000px yukseklikte %55 = 1100, asgarin (320 * dpr) uzerinde.
-      expect(ScreenWatchOverlaySizes.panelHeightPx(1, 2000), 1100);
+    test('bubbleDiameterDp cihaz yogunlugundan bagimsizdir', () {
+      // resizeOverlay() dp bekler (bkz. sinif dokumani) - cihaz piksel
+      // oranindan etkilenmemeli.
+      expect(ScreenWatchOverlaySizes.bubbleDiameterDp, 56);
     });
 
-    test('panelHeightPx kucuk ekranlarda asgar yuksekligin altina inmez', () {
-      // 400px yukseklikte %55 = 220, asgar (320 * 1) = 320'nin altinda
-      // kaliyor, bu yuzden asgara yukselir.
-      expect(ScreenWatchOverlaySizes.panelHeightPx(1, 400), 320);
+    test('panelHeightDp ekran yuksekliginin yuzde 55ini kullanir', () {
+      // 2000dp yukseklikte %55 = 1100, asgarin (320dp) uzerinde.
+      expect(ScreenWatchOverlaySizes.panelHeightDp(2000), 1100);
     });
 
-    test('panelHeightPx asgar hesabinda da dpr kullanir', () {
-      // 400px yukseklikte %55 = 220, asgar (320 * 2) = 640'in altinda
-      // kaliyor, bu yuzden asgara (640) yukselir.
-      expect(ScreenWatchOverlaySizes.panelHeightPx(2, 400), 640);
+    test('panelHeightDp kucuk ekranlarda asgar yuksekligin altina inmez', () {
+      // 400dp yukseklikte %55 = 220, asgar olan 320dp'nin altinda
+      // kaliyor, bu yuzden asgara (320) yukselir.
+      expect(ScreenWatchOverlaySizes.panelHeightDp(400), 320);
+    });
+
+    test('panelHeightDp cihaz yogunlugundan bagimsizdir', () {
+      // dp cinsinden calistigi icin (resizeOverlay() zaten kendi
+      // icinde yogunlukla carpiyor - bkz. sinif dokumani) burada ikinci
+      // bir yogunluk carpimi OLMAMALI.
+      expect(ScreenWatchOverlaySizes.panelHeightDp(890), 490);
     });
   });
 }

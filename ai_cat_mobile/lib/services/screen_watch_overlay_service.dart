@@ -2,21 +2,40 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
 /// "Ekranda Gez" kayan balonunun (bkz. lib/overlay/screen_watch_overlay_app.dart)
 /// boyut hesaplari - saf fonksiyonlar, cihaz piksel oranindan/ekran
-/// yuksekliginden bagimsiz olarak test edilebilir. showOverlay/resizeOverlay
-/// piksel (dp degil) bekledigi icin devicePixelRatio ile carpma burada
-/// yapilir.
+/// yuksekliginden bagimsiz olarak test edilebilir.
+///
+/// ONEMLI: flutter_overlay_window 0.5.0'da showOverlay ile resizeOverlay
+/// TUTARSIZ birim bekler - showOverlay verilen height/width'i oldugu gibi
+/// HAM PIKSEL olarak kullanirken (bkz. FlutterOverlayWindowPlugin.java,
+/// WindowSetup.width/height dogrudan LayoutParams'a geciyor), resizeOverlay
+/// AYNI degerleri DP sanip cihaz yogunlugu ile TEKRAR carpiyor (bkz.
+/// OverlayService.resizeOverlay -> dpToPx). Bu yuzden showOverlay icin
+/// [bubbleDiameterPx] (piksel), resizeOverlay icin [bubbleDiameterDp]/
+/// [panelHeightDp] (dp) kullanilmali - ikisini karistirmak (once yasandigi
+/// gibi) panelin/balonun yogunluk kati kadar yanlis boyutlanmasina yol acar.
 class ScreenWatchOverlaySizes {
-  /// Toplanmis haldeki balonun capi - 56dp, standart bir dokunma hedefi
-  /// icin yeterince buyuk ama ekranin cogunu kapatmayacak kadar kucuk.
-  static int bubbleDiameterPx(double devicePixelRatio) =>
-      (56 * devicePixelRatio).round();
+  /// Balonun/panelin dp cinsinden capi - resizeOverlay() ile balona
+  /// donulurken kullanilir (bkz. yukaridaki birim notu).
+  static const int bubbleDiameterDp = 56;
 
-  /// Genisletilmis panelin yuksekligi - ekran yuksekliginin bir orani
-  /// (ekranin tamamini kapatip altindaki uygulamayi tamamen gizlemesin
-  /// diye 0.55 ile sinirlanir), en az 320dp.
-  static int panelHeightPx(double devicePixelRatio, double screenHeightPx) {
-    final desired = screenHeightPx * 0.55;
-    final minHeight = 320 * devicePixelRatio;
+  static const double _panelHeightFraction = 0.55;
+  static const int _panelMinHeightDp = 320;
+
+  /// Ilk balonu olustururken showOverlay() icin HAM PIKSEL cap - 56dp,
+  /// standart bir dokunma hedefi icin yeterince buyuk ama ekranin cogunu
+  /// kapatmayacak kadar kucuk.
+  static int bubbleDiameterPx(double devicePixelRatio) =>
+      (bubbleDiameterDp * devicePixelRatio).round();
+
+  /// Panele genislerken resizeOverlay() icin DP yukseklik. [screenHeightDp]
+  /// GERCEK ekranin mantiksal yuksekligi olmali (bkz.
+  /// View.of(context).display) - balonun o anki pencere boyutundan
+  /// (MediaQuery, o an sadece kucuk balon kadardir) DEGIL. Ekranin
+  /// tamamini kapatip altindaki uygulamayi tamamen gizlemesin diye 0.55
+  /// ile sinirlanir, en az 320dp.
+  static int panelHeightDp(double screenHeightDp) {
+    final desired = screenHeightDp * _panelHeightFraction;
+    final minHeight = _panelMinHeightDp.toDouble();
     return (desired < minHeight ? minHeight : desired).round();
   }
 }
