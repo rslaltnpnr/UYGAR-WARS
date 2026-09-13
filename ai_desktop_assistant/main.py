@@ -767,6 +767,49 @@ def select_context_turns(entries, enabled, max_turns=CONTEXT_HISTORY_TURNS):
     return [{"question": e["question"], "answer": e["answer"]} for e in recent]
 
 
+def format_relative_time(occurred_at, now):
+    """[occurred_at], record_connection'in urettigi "last_seen" gibi
+    "YYYY-MM-DD HH:MM" bicimindeki bir zaman dizesi; [now] bir datetime.
+    Insan-okunur goreli sure dondurur ("az once", "5 dakika once", "3
+    saat once", "2 gun once") - "Bağlantılar İçin Son Kullanım
+    Göstergesi" bunu mutlak zaman damgasinin yanina ekler. Ayristirilamayan
+    bir deger oldugu gibi geri dondurulur."""
+    try:
+        dt = datetime.strptime(occurred_at, "%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return str(occurred_at)
+    delta_seconds = (now - dt).total_seconds()
+    if delta_seconds < 60:
+        return "az once"
+    minutes = int(delta_seconds // 60)
+    if minutes < 60:
+        return f"{minutes} dakika once"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours} saat once"
+    days = int(hours // 24)
+    return f"{days} gun once"
+
+
+def format_recent_connections(connections, now):
+    """[connections] (RemoteCommandServer.recent_connections - IP -> bkz.
+    record_connection) icin okunabilir bir ozet uretir - "Uzaktan Kumanda"
+    penceresinde gosterilir. Her satirda mutlak zaman damgasinin yaninda
+    format_relative_time ile goreli bir "son kullanim" gostergesi de yer
+    alir (orn. "5 dakika once")."""
+    if not connections:
+        return "Son baglanan cihaz yok."
+    rows = sorted(connections.items(), key=lambda kv: kv[1]["last_seen_epoch"], reverse=True)
+    lines = ["Son baglanan cihazlar:"]
+    for conn_ip, conn in rows[:10]:
+        relative = format_relative_time(conn.get("last_seen", ""), now)
+        lines.append(
+            f"  {conn_ip} - son gorulme {conn['last_seen']} ({relative}) "
+            f"({conn['last_endpoint']}, {conn['count']} istek)"
+        )
+    return "\n".join(lines)
+
+
 def record_connection(recent_connections, client_ip, endpoint, now_epoch, max_connections):
     """[recent_connections] (IP -> {"count", "last_seen_epoch", "last_seen",
     "last_endpoint"}) sozlugunu [client_ip]'den basariyla dogrulanmis bir
@@ -2959,19 +3002,7 @@ class CatCharacter(QWidget):
             self._show_remote_info()
 
     def _recent_connections_text(self):
-        connections = self.remote_server.recent_connections
-        if not connections:
-            return "Son baglanan cihaz yok."
-        rows = sorted(
-            connections.items(), key=lambda kv: kv[1]["last_seen_epoch"], reverse=True
-        )
-        lines = ["Son baglanan cihazlar:"]
-        for conn_ip, conn in rows[:10]:
-            lines.append(
-                f"  {conn_ip} - son gorulme {conn['last_seen']} "
-                f"({conn['last_endpoint']}, {conn['count']} istek)"
-            )
-        return "\n".join(lines)
+        return format_recent_connections(self.remote_server.recent_connections, datetime.now())
 
     def _show_access_log(self):
         self._register_activity()

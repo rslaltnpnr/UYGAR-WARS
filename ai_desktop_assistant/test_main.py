@@ -35,6 +35,8 @@ from main import (
     format_automation_rules,
     format_history_entries,
     format_notifications,
+    format_recent_connections,
+    format_relative_time,
     format_screenshot_history,
     format_usage_stats,
     is_newer_version,
@@ -480,6 +482,56 @@ class TestRecordConnection:
         record_connection(conns, "1.1.1.1", "/media", 3000.0, max_connections=2)
         assert set(conns) == {"1.1.1.1", "2.2.2.2"}
         assert conns["1.1.1.1"]["count"] == 2
+
+
+class TestFormatRelativeTime:
+    def test_bir_dakikadan_az_az_once_doner(self):
+        now = datetime(2024, 1, 1, 12, 0, 30)
+        assert format_relative_time("2024-01-01 12:00", now) == "az once"
+
+    def test_dakika_cinsinden(self):
+        now = datetime(2024, 1, 1, 12, 5, 0)
+        assert format_relative_time("2024-01-01 12:00", now) == "5 dakika once"
+
+    def test_saat_cinsinden(self):
+        now = datetime(2024, 1, 1, 15, 0, 0)
+        assert format_relative_time("2024-01-01 12:00", now) == "3 saat once"
+
+    def test_gun_cinsinden(self):
+        now = datetime(2024, 1, 3, 12, 0, 0)
+        assert format_relative_time("2024-01-01 12:00", now) == "2 gun once"
+
+    def test_ayristirilamayan_deger_oldugu_gibi_doner(self):
+        assert format_relative_time("gecersiz", datetime(2024, 1, 1)) == "gecersiz"
+        assert format_relative_time(None, datetime(2024, 1, 1)) == "None"
+
+
+class TestFormatRecentConnections:
+    def test_bos_sozluk_icin_mesaj_doner(self):
+        assert format_recent_connections({}, datetime(2024, 1, 1)) == "Son baglanan cihaz yok."
+
+    def test_en_yeni_en_ustte_ve_goreli_sure_icerir(self):
+        now = datetime(2024, 1, 1, 12, 10, 0)
+        connections = {
+            "1.1.1.1": {
+                "count": 3,
+                "last_seen_epoch": 1000,
+                "last_seen": "2024-01-01 12:00",
+                "last_endpoint": "/open",
+            },
+            "2.2.2.2": {
+                "count": 1,
+                "last_seen_epoch": 2000,
+                "last_seen": "2024-01-01 12:05",
+                "last_endpoint": "/screenshot",
+            },
+        }
+        text = format_recent_connections(connections, now)
+        lines = text.split("\n")
+        assert "2.2.2.2" in lines[1]
+        assert "5 dakika once" in lines[1]
+        assert "1.1.1.1" in lines[2]
+        assert "10 dakika once" in lines[2]
 
 
 class TestShouldRunAutoBackup:
