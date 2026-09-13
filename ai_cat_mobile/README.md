@@ -61,7 +61,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   Port/PIN alanlarindaki "QR ile Ekle" ile o penceredeki QR kodu
   kamerayla tarayip ayni bilgileri elle yazmadan doldurabilirsiniz.
   YouTube, YouTube Music, Spotify ve Google icin hazir baglanti
-  butonlari da var.
+  butonlari da var. "Otomasyon Kuralları" butonu, bilgisayarda tanimli
+  otomasyon kurallarini (masaustu uygulamasindaki "Otomasyon Kurallari"
+  penceresiyle ayni kurallar) salt-okunur olarak listeler - kurallar
+  yalnizca masaustunde olusturulup duzenlenebilir, telefon yalnizca
+  hangilerinin aktif oldugunu gorebilir.
   **Birden fazla bilgisayarla** (orn. "Ev", "Is") eslesip aralarinda
   gecis yapabilirsiniz - her biri kendi IP/port/PIN/sertifika kaydini
   tasir. Ana ekranda kedinin ismi altinda **aktif bilgisayar gostergesi**

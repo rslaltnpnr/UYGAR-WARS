@@ -1467,6 +1467,7 @@ class RemoteCommandServer(QThread):
                     "/screenshot",
                     "/history",
                     "/history/import",
+                    "/automation",
                     "/alerts",
                     "/clipboard",
                 ):
@@ -1565,6 +1566,10 @@ class RemoteCommandServer(QThread):
 
                 if self.path == "/history":
                     self._send_json(200, {"status": "ok", "entries": history.entries})
+                    return
+
+                if self.path == "/automation":
+                    self._send_json(200, {"status": "ok", "rules": config.get("automation_rules") or []})
                     return
 
                 if self.path == "/history/import":

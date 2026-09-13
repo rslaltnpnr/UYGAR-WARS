@@ -81,6 +81,18 @@ class HistoryPushResult {
   const HistoryPushResult(this.fingerprint, this.added);
 }
 
+/// [fetchAutomationRules] sonucu: parmak izinin yani sira bilgisayarda
+/// tanimli otomasyon kurallarinin (name, trigger_type, trigger_value,
+/// action_type, action_value, enabled) tam listesini tasir - salt okunur,
+/// bu ekrandan duzenlenemez (bkz. masaustu uygulamasinin "Otomasyon
+/// Kurallari" penceresi).
+class AutomationFetchResult {
+  final String fingerprint;
+  final List<Map<String, dynamic>> rules;
+
+  const AutomationFetchResult(this.fingerprint, this.rules);
+}
+
 class _RawResponse {
   final int statusCode;
   final String body;
@@ -318,6 +330,34 @@ class RemoteControlService {
       return HistoryFetchResult(response.fingerprint, entries);
     } catch (_) {
       throw RemoteControlException('Geçmiş okunamadı.');
+    }
+  }
+
+  Future<AutomationFetchResult> fetchAutomationRules({
+    required String ip,
+    required int port,
+    required String pin,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/automation',
+      body: {'pin': pin},
+      pinnedFingerprint: pinnedFingerprint,
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      final rules = List<Map<String, dynamic>>.from(data['rules'] as List);
+      return AutomationFetchResult(response.fingerprint, rules);
+    } catch (_) {
+      throw RemoteControlException('Otomasyon kurallari okunamadi.');
     }
   }
 
