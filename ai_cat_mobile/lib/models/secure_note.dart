@@ -7,19 +7,36 @@ class SecureNote {
   final String title;
   final String body;
   final DateTime updatedAt;
+  final List<String> tags;
 
   const SecureNote({
     required this.id,
     required this.title,
     required this.body,
     required this.updatedAt,
+    this.tags = const [],
   });
+
+  SecureNote copyWith({
+    String? title,
+    String? body,
+    DateTime? updatedAt,
+    List<String>? tags,
+  }) =>
+      SecureNote(
+        id: id,
+        title: title ?? this.title,
+        body: body ?? this.body,
+        updatedAt: updatedAt ?? this.updatedAt,
+        tags: tags ?? this.tags,
+      );
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
         'body': body,
         'updated_at': updatedAt.toIso8601String(),
+        'tags': tags,
       };
 
   factory SecureNote.fromJson(Map<String, dynamic> json) => SecureNote(
@@ -28,5 +45,25 @@ class SecureNote {
         body: json['body'] as String? ?? '',
         updatedAt: DateTime.tryParse(json['updated_at'] as String? ?? '') ??
             DateTime.now(),
+        tags: (json['tags'] as List<dynamic>?)
+                ?.map((t) => t.toString())
+                .toList() ??
+            const [],
       );
+}
+
+/// Kullanicinin virgulle ayirarak yazdigi etiket girisini ("iş, önemli,  iş")
+/// normallestirilmis, bos olmayan, tekrarsiz bir etiket listesine cevirir -
+/// hem not ekleme/duzenleme formunda hem de not listesini bir etikete gore
+/// filtrelerken kullanilir.
+List<String> parseTagsInput(String input) {
+  final seen = <String>{};
+  final tags = <String>[];
+  for (final raw in input.split(',')) {
+    final tag = raw.trim();
+    if (tag.isEmpty || seen.contains(tag)) continue;
+    seen.add(tag);
+    tags.add(tag);
+  }
+  return tags;
 }
