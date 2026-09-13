@@ -227,6 +227,20 @@ karakteri (PyQt6).
 - **Pano senkronizasyonu**: telefon uygulamasindan gonderilen metni
   bilgisayarin panosuna yazabilir ya da bilgisayarin panosundaki metni
   telefona cekebilirsiniz (ayni PIN+TLS korumali kanal uzerinden).
+- **Canlı Kontrol**: telefon uygulamasindaki "Bilgisayari Kumanda Et"
+  panelinden "Canlı Kontrol"e girildiginde, bilgisayarin ekrani
+  telefona GERCEK ZAMANLI (surekli video karesi, ~12 kare/saniye)
+  akitilir; telefonda dokunup surukleyerek fareyi hareket ettirip
+  tiklayabilir, klavye ile GERCEK ZAMANLI yazabilirsiniz - sanki
+  bilgisayarin basindaymissiniz gibi. Ayri, hafif bir TLS soket
+  sunucusu (`REMOTE_LIVE_PORT`, REST komut sunucusundan bir port
+  fazlasi) uzerinden calisir; ayni sertifika/PIN eslestirmesini
+  kullanir, ayrica bir QR/eslestirme gerekmez. Bir oturum baslar/
+  biterken sistem tepsisinden acik bir bildirim gosterilir (fare/
+  klavyenin uzaktan kullanildigini bilgisayarin basindaki biri
+  fark etsin diye - sessiz/gizli calismaz). Baglanti kesilince o an
+  basili olan tum tuslar otomatik birakilir (bir tusun fiziksel olarak
+  "yapisik" kalmamasi icin).
 - **Hakkinda**: sag tik menusundeki "Hakkinda" ile surum numarasini ve
   proje deposunun linkini gorebilirsiniz.
 

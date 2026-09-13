@@ -6,6 +6,7 @@ import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
 import '../screens/automation_rules_screen.dart';
 import '../screens/command_history_screen.dart';
+import '../screens/live_control_screen.dart';
 import '../screens/qr_pairing_scanner_screen.dart';
 import '../services/command_history_service.dart';
 import '../services/command_queue_service.dart';
@@ -790,6 +791,20 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     }
   }
 
+  Future<void> _openLiveControl() async {
+    final profile = _activeProfile;
+    if (_busy || profile == null) return;
+    _saveConnectionInfo();
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LiveControlScreen(
+          profile: profile,
+          onFingerprintUpdated: _updateActiveFingerprint,
+        ),
+      ),
+    );
+  }
+
   Future<void> _openAutomationRules() async {
     final profile = _activeProfile;
     if (_busy || profile == null) return;
@@ -1210,6 +1225,13 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                     onPressed: _busy ? null : _takeScreenshot,
                     icon: const Icon(Icons.screenshot_monitor),
                     label: const Text('Ekran Görüntüsü Al'),
+                  ),
+                  const SizedBox(height: 10),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _busy || _activeProfile == null ? null : _openLiveControl,
+                    icon: const Icon(Icons.videocam_outlined),
+                    label: const Text('Canlı Kontrol'),
                   ),
                   const SizedBox(height: 10),
                   OutlinedButton.icon(
