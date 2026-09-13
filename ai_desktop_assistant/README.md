@@ -167,6 +167,11 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Kişilikler Arası Hızlı Geçiş**: sag tik menusundeki "Kisilik" alt
+  menusunden ("Varsayilan", "Sakaci", "Ciddi", "Nazik", "Enerjik")
+  kedinizin Gemini'ye verdigi cevaplardaki tonunu aninda degistirebilirsiniz -
+  kimligi (ismi, kim oldugu) hep ayni kalir, yalnizca nasil konustugu
+  degisir. Secim "Ayarlari Disa/Ice Aktar" ile de tasinabilir.
 - **Ayarları Dışa/İçe Aktarma**: sag tik menusundeki "Ayarlari Disa
   Aktar..."/"Ayarlari Ice Aktar..." ile karakter adi, olcek, model, kaplama,
   tema ve otomasyon tercihleri gibi kisisellestirme ayarlarinizi bir JSON
