@@ -230,12 +230,15 @@ class _ScreenWatchOverlayState extends State<_ScreenWatchOverlay> {
   Widget _buildBubble() {
     return GestureDetector(
       onTap: _expand,
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF7C4DFF),
-          shape: BoxShape.circle,
+      child: ClipOval(
+        child: Container(
+          color: const Color(0xFF7C4DFF),
+          padding: const EdgeInsets.all(6),
+          child: Image.asset(
+            'assets/cat/fuff_norm.png',
+            fit: BoxFit.contain,
+          ),
         ),
-        child: const Icon(Icons.remove_red_eye, color: Colors.white),
       ),
     );
   }

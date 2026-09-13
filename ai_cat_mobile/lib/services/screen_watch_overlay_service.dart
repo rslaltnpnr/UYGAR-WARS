@@ -65,7 +65,12 @@ class ScreenWatchOverlayService {
       enableDrag: true,
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilitySecret,
-      positionGravity: PositionGravity.auto,
+      // "auto" birakildiginda balon parmak kaldirilir kaldirilmaz en
+      // yakin kenara (sol/sag) otomatik yapisiyor - bu da yatay
+      // suruklemenin hic ise yaramadigi izlenimi veriyor (dikey konum
+      // kalirken yatay her zaman kenara sicriyor). "none" ile balon tam
+      // birakildigi yerde kaliyor.
+      positionGravity: PositionGravity.none,
       overlayTitle: 'Ekranda Gez',
       overlayContent: 'Bilgisayar ekranını izlemek için dokunun.',
     );
