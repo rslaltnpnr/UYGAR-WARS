@@ -29,7 +29,7 @@ import traceback
 import webbrowser
 from collections import deque
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from PyQt6.QtCore import QObject, QPoint, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import (
@@ -45,6 +45,7 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -763,6 +764,31 @@ def load_pixmap(skin_dir, filename, placeholder_label=""):
     return make_placeholder_pixmap(label=placeholder_label)
 
 
+def build_pairing_qr_pixmap(ip, port, pin, fingerprint, box_size=6):
+    """[build_pairing_uri]'i kodlayan bir QR kodu QPixmap olarak uretir.
+    "qrcode" kutuphanesi kurulu degilse ya da beklenmedik bir hata
+    olursa None doner - QR tamamen opsiyoneldir, metin bilgisi
+    (IP/Port/PIN) zaten yeterlidir, bu yuzden eksikligi uygulamanin
+    calismasini engellememeli."""
+    try:
+        import qrcode
+    except ImportError:
+        return None
+    try:
+        import io
+
+        img = qrcode.make(
+            build_pairing_uri(ip, port, pin, fingerprint), box_size=box_size, border=2
+        )
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        pixmap = QPixmap()
+        pixmap.loadFromData(buffer.getvalue(), "PNG")
+        return pixmap if not pixmap.isNull() else None
+    except Exception:
+        return None
+
+
 # --------------------------------------------------------------------------
 # Uzaktan kumanda (telefon uygulamasindan yerel ag uzerinden komut)
 # --------------------------------------------------------------------------
@@ -779,6 +805,19 @@ def get_local_ip():
         return ip
     except OSError:
         return "127.0.0.1"
+
+
+PAIRING_URI_SCHEME = "aikedi"
+
+
+def build_pairing_uri(ip, port, pin, fingerprint):
+    """Uzaktan kumanda bilgi penceresindeki QR koda gomulecek URI'yi
+    olusturur - mobil uygulama bunu (kamerayla) tarayip IP/Port/PIN/
+    sertifika parmak izi alanlarini elle yazmadan doldurur. urlencode
+    kullanilir cunku parmak izi iki nokta ust uste (:) iceriyor ve bu
+    URI icinde ozel anlam tasir."""
+    query = urlencode({"ip": ip, "port": port, "pin": pin, "fp": fingerprint})
+    return f"{PAIRING_URI_SCHEME}://pair?{query}"
 
 
 REMOTE_CERT_PATH = os.path.join(base_dir(), "remote_cert.pem")
@@ -2267,11 +2306,22 @@ class CatCharacter(QWidget):
             if fingerprint
             else ""
         )
-        box = QMessageBox(self)
-        box.setWindowTitle("Uzaktan Kumanda")
-        box.setText(
+        qr_pixmap = build_pairing_qr_pixmap(ip, REMOTE_SERVER_PORT, pin, fingerprint)
+        qr_hint = (
+            "ya da asagidaki QR kodu telefonda \"QR ile Ekle\" ile "
+            "tarayin - alanlar otomatik dolar. "
+            if qr_pixmap is not None
+            else ""
+        )
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Uzaktan Kumanda")
+        layout = QVBoxLayout(dialog)
+
+        text_label = QLabel(
             "Telefon uygulamasindaki \"Bilgisayari Kumanda Et\" bolumune "
-            "bu bilgileri girin (ikisi de ayni Wi-Fi agina bagli olmali). "
+            f"bu bilgileri girin (ikisi de ayni Wi-Fi agina bagli olmali), "
+            f"{qr_hint}"
             "Baglanti HTTPS (TLS) ile sifrelenir; telefon ilk baglantida "
             "asagidaki parmak izini kaydedip sonraki baglantilarda dogrular:\n\n"
             f"IP Adresi: {ip}\n"
@@ -2285,10 +2335,34 @@ class CatCharacter(QWidget):
             "sey (PIN, sertifika dogrulamasi) ayni sekilde calisir.\n"
             f"\n{self._recent_connections_text()}"
         )
-        regen_button = box.addButton("PIN'i Yenile", QMessageBox.ButtonRole.ActionRole)
-        box.addButton(QMessageBox.StandardButton.Close)
-        box.exec()
-        if box.clickedButton() == regen_button:
+        text_label.setWordWrap(True)
+        layout.addWidget(text_label)
+
+        if qr_pixmap is not None:
+            qr_label = QLabel()
+            qr_label.setPixmap(qr_pixmap)
+            qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(qr_label)
+
+        button_row = QHBoxLayout()
+        regen_button = QPushButton("PIN'i Yenile")
+        close_button = QPushButton("Kapat")
+        button_row.addWidget(regen_button)
+        button_row.addStretch()
+        button_row.addWidget(close_button)
+        layout.addLayout(button_row)
+
+        regenerated = {"value": False}
+
+        def on_regen():
+            regenerated["value"] = True
+            dialog.accept()
+
+        regen_button.clicked.connect(on_regen)
+        close_button.clicked.connect(dialog.accept)
+
+        dialog.exec()
+        if regenerated["value"]:
             self.config.set("remote_pin", f"{random.randint(0, 999999):06d}")
             # Yeni PIN'i bilmeyen eski baglantilar artik dogrulanamaz -
             # "aktif oturumlari sonlandirma" karsiligi budur (bkz. sinif

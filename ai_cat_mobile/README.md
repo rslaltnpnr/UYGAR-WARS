@@ -57,8 +57,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   gonderip bilgisayarda acilmasini saglar (orn. bir YouTube linki
   gondererek muzik/video baslatabilirsiniz). Bilgisayardaki kedi
   uygulamasinin sag tik menusundeki "Uzaktan Kumanda Bilgisi"nden IP,
-  port ve PIN'i alip bu panelde bir kez girmeniz yeterli. YouTube,
-  YouTube Music, Spotify ve Google icin hazir baglanti butonlari da var.
+  port ve PIN'i alip bu panelde bir kez girmeniz yeterli - ya da IP/
+  Port/PIN alanlarindaki "QR ile Ekle" ile o penceredeki QR kodu
+  kamerayla tarayip ayni bilgileri elle yazmadan doldurabilirsiniz.
+  YouTube, YouTube Music, Spotify ve Google icin hazir baglanti
+  butonlari da var.
   **Birden fazla bilgisayarla** (orn. "Ev", "Is") eslesip aralarinda
   gecis yapabilirsiniz - her biri kendi IP/port/PIN/sertifika kaydini
   tasir. Ana ekranda kedinin ismi altinda **aktif bilgisayar gostergesi**

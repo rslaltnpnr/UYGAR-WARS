@@ -4,8 +4,10 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../models/command_macro.dart';
 import '../models/queued_command.dart';
 import '../models/remote_profile.dart';
+import '../screens/qr_pairing_scanner_screen.dart';
 import '../services/command_queue_service.dart';
 import '../services/macro_service.dart';
+import '../services/pairing_uri.dart';
 import '../services/remote_control_service.dart';
 import '../services/settings_service.dart';
 import '../theme/app_colors.dart';
@@ -208,6 +210,60 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
       _profiles = [..._profiles, profile];
       _activeProfileId = profile.id;
       _status = null;
+    });
+    _persistProfiles();
+    _loadActiveProfileIntoFields();
+  }
+
+  /// Masaustu uygulamasindaki "Uzaktan Kumanda" penceresindeki QR kodu
+  /// tarayip IP/Port/PIN/sertifika parmak izini elle yazmadan yeni bir
+  /// profil olusturur - _addProfile()'in ayni akisi, sadece bos alanlar
+  /// yerine taranan degerlerle doldurulmus olarak.
+  Future<void> _addProfileFromQr() async {
+    final result = await Navigator.of(context).push<PairingInfo>(
+      MaterialPageRoute(builder: (_) => const QrPairingScannerScreen()),
+    );
+    if (result == null || !mounted) return;
+
+    final controller = TextEditingController(
+      text: 'Bilgisayar ${_profiles.length + 1}',
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Taranan Bilgisayarı Ekle'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'İsim (örn. Ev, İş)'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('İptal'),
+          ),
+          ElevatedButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop(controller.text.trim()),
+            child: const Text('Ekle'),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name.isEmpty) return;
+    final profile = RemoteProfile(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: name,
+      ip: result.ip,
+      port: result.port,
+      pin: result.pin,
+      certFingerprint: result.certFingerprint,
+    );
+    setState(() {
+      _profiles = [..._profiles, profile];
+      _activeProfileId = profile.id;
+      _status = 'QR koddan okundu: "$name" eklendi.';
+      _statusIsError = false;
     });
     _persistProfiles();
     _loadActiveProfileIntoFields();
@@ -876,6 +932,11 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                       icon: Icon(Icons.add_circle_outline, color: colors.accent),
                       tooltip: 'Yeni Bilgisayar Ekle',
                       onPressed: _addProfile,
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.qr_code_scanner, color: colors.accent),
+                      tooltip: 'QR ile Ekle',
+                      onPressed: _addProfileFromQr,
                     ),
                     if (hasProfile)
                       IconButton(

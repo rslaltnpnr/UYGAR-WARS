@@ -26,7 +26,11 @@ karakteri (PyQt6).
   parmak izini ve **son baglanan cihazlarin listesini** (IP, son gorulme
   zamani, son kullandigi uc nokta, istek sayisi) gorursunuz; bunlari
   telefon uygulamasindaki "Bilgisayari Kumanda Et" panelinde bir kez
-  girmeniz yeterli. Kalici bir "oturum" kavrami yoktur - her istek kendi
+  girmeniz yeterli - ya da bu bilgileri elle yazmak yerine ayni
+  penceredeki **QR kodu** telefonda "QR ile Ekle" ile taratip IP/Port/
+  PIN/sertifika parmak izini otomatik doldurabilirsiniz (yazim hatasi
+  riski olmaz; `qrcode` kutuphanesi kurulu degilse QR gizlenir, metin
+  bilgisi yine calisir). Kalici bir "oturum" kavrami yoktur - her istek kendi
   basina PIN ile dogrulanir - bu yuzden ayni penceredeki "PIN'i Yenile"
   butonu, PIN'i bilen butun cihazlarin erisimini aninda gecersiz kilarak
   "tum baglantilari sonlandirma" islevi gorur (ve baglanti listesini de
