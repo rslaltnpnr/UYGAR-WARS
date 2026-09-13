@@ -162,6 +162,11 @@ karakteri (PyQt6).
   kurtarmanin bir yolu yoktur (bu, gercekten sifreli olmanin bedelidir);
   "Şifremi unuttum" secenegi tum notlari silip sifirdan yeni bir
   sifreyle baslamanizi saglar.
+- **Hazır Sorular**: konusma balonundaki soru kutusunun ustunde bir
+  acilir liste bulunur; sik sorulan birkac hazir soruyu ("Ekranimda su
+  an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
+  isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
+  sormanin bir yolu.
 - **Guncelleme kontrolu ve otomatik kurulum**: acilista GitHub
   Releases'ten yeni bir surum olup olmadigi sessizce kontrol edilir
   (bulunursa sistem tepsisinden bildirim gosterilir - tiklayinca detaylar

@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import pytest
 
 from main import (
+    DEFAULT_QUICK_QUESTIONS,
     HISTORY_ENTRY_MAX_FIELD_LENGTH,
     SecureNotepadService,
     WrongPasswordError,
@@ -623,6 +624,19 @@ class TestDescribeAndFormatAutomationRules:
         lines = text.split("\n")
         assert lines[0].startswith("1. ")
         assert lines[1].startswith("2. ")
+
+
+class TestDefaultQuickQuestions:
+    def test_bos_degil(self):
+        assert len(DEFAULT_QUICK_QUESTIONS) > 0
+
+    def test_tum_ogeler_bos_olmayan_metin(self):
+        for question in DEFAULT_QUICK_QUESTIONS:
+            assert isinstance(question, str)
+            assert question.strip()
+
+    def test_tekrar_eden_soru_yok(self):
+        assert len(DEFAULT_QUICK_QUESTIONS) == len(set(DEFAULT_QUICK_QUESTIONS))
 
 
 class TestSecureNotepadService:
