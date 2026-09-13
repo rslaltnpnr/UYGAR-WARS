@@ -167,6 +167,12 @@ karakteri (PyQt6).
   an ne var, ozetler misin?" gibi) secmek soru kutusunu doldurur, siz
   isterseniz duzenleyip Enter'a basarsiniz - yazmadan hizlica soru
   sormanin bir yolu.
+- **Otomatik Gece/Gündüz Teması**: sag tik menusundeki "Otomatik Gece/
+  Gunduz Temasi" isaretlenirse tema, gunun saatine gore kendiliginden
+  degisir (varsayilan olarak 07:00'de acik, 19:00'da koyu tema) -
+  "Acik Tema" ile manuel secim hala calisir, ama otomatik mod acikken
+  bir sonraki kontrolde (dakikalar icinde) tekrar gunun saatine gore
+  ayarlanir.
 - **Tekrarlayan Hatırlatıcılar**: "Hatirlatici Kur" ile bir hatirlatici
   olustururken artik tek seferlik yerine belirttiginiz dakika araligiyla
   surekli tekrarlanmasini secebilirsiniz; aktif tekrarlayan hatirlatici
