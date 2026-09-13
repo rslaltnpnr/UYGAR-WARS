@@ -3,6 +3,7 @@ import 'package:home_widget/home_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/app_lock.dart';
+import '../services/auto_theme.dart';
 import '../services/backup_service.dart';
 import '../services/settings_service.dart';
 import '../services/update_service.dart';
@@ -35,6 +36,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
   late WidgetLaunchAction _widgetSlot1Action;
   late WidgetLaunchAction _widgetSlot2Action;
   late bool _appLockEnabled;
+  late bool _autoThemeEnabled;
+  late final TextEditingController _autoThemeDayStartController;
+  late final TextEditingController _autoThemeNightStartController;
   bool _obscureKey = true;
 
   @override
@@ -49,12 +53,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
     _widgetSlot1Action = widget.settings.widgetSlot1Action;
     _widgetSlot2Action = widget.settings.widgetSlot2Action;
     _appLockEnabled = widget.settings.appLockEnabled;
+    _autoThemeEnabled = widget.settings.autoThemeEnabled;
+    _autoThemeDayStartController =
+        TextEditingController(text: widget.settings.autoThemeDayStart);
+    _autoThemeNightStartController =
+        TextEditingController(text: widget.settings.autoThemeNightStart);
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _apiKeyController.dispose();
+    _autoThemeDayStartController.dispose();
+    _autoThemeNightStartController.dispose();
     super.dispose();
   }
 
@@ -66,6 +77,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
     widget.settings.apiKey = _apiKeyController.text.trim();
     widget.settings.themeMode = _themeMode;
     widget.settings.autoBackupEnabled = _autoBackupEnabled;
+    widget.settings.autoThemeEnabled = _autoThemeEnabled;
+    final dayStart = parseHhMm(_autoThemeDayStartController.text);
+    if (dayStart != null) widget.settings.autoThemeDayStart = dayStart;
+    final nightStart = parseHhMm(_autoThemeNightStartController.text);
+    if (nightStart != null) widget.settings.autoThemeNightStart = nightStart;
     widget.settings.widgetSlot1Action = _widgetSlot1Action;
     widget.settings.widgetSlot2Action = _widgetSlot2Action;
     HomeWidget.saveWidgetData<String>(
@@ -288,6 +304,43 @@ class _SettingsDialogState extends State<SettingsDialog> {
               onSelectionChanged: (selection) =>
                   setState(() => _themeMode = selection.first),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                'Otomatik Gece/Gündüz Teması',
+                style: TextStyle(color: colors.textPrimary, fontSize: 13),
+              ),
+              subtitle: Text(
+                'Yukarıdaki seçimi yok sayıp temayı gunun saatine göre '
+                'kendiliğinden değiştirir.',
+                style: TextStyle(color: colors.textMuted, fontSize: 11),
+              ),
+              value: _autoThemeEnabled,
+              onChanged: (value) => setState(() => _autoThemeEnabled = value),
+            ),
+            if (_autoThemeEnabled)
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _autoThemeDayStartController,
+                      decoration: const InputDecoration(
+                        labelText: 'Gündüz başlangıcı (SS:DD)',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _autoThemeNightStartController,
+                      decoration: const InputDecoration(
+                        labelText: 'Gece başlangıcı (SS:DD)',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 16),
             Align(
               alignment: Alignment.centerLeft,

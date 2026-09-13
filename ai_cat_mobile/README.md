@@ -51,6 +51,11 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   Şifreli Not Defteri'nin sifrelemesinden farklidir: veri sifrelenmez,
   yalnizca acilis ekrani PIN arkasina gizlenir (hizli goz atmaya karsi
   bir engel, fiziksel cihaz erisimine karsi degil).
+- **Otomatik Gece/Gündüz Teması** (ayarlar penceresinde): acilirsa,
+  "Tema" secimini (Sistem/Açık/Koyu) yok sayip temayı gunun saatine
+  gore kendiliginden degistirir (varsayilan 07:00'de acik, 19:00'da
+  koyu) - masaustu suruumundeki ayni ozelligin mobil karsiligi, ayni
+  gunduz/gece saat araligi mantigi.
 - **Kullanım İstatistikleri** (grafik ikonu): toplam/bugün/bu hafta sorulan
   soru sayısı, favori ve hatalı yanıt sayısı, bildirim/makro/eşleşik
   bilgisayar/kuyrukta bekleyen komut sayısı ve ilk soru tarihi gibi

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/app_lock_screen.dart';
 import 'screens/home_screen.dart';
+import 'services/auto_theme.dart';
 import 'services/settings_service.dart';
 import 'theme/app_colors.dart';
 
@@ -20,11 +23,18 @@ class AiCatApp extends StatefulWidget {
 class _AiCatAppState extends State<AiCatApp> {
   ThemeMode _themeMode = ThemeMode.dark; // ilk yuklenene kadarki varsayilan
   SettingsService? _settings;
+  Timer? _autoThemeTimer;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _autoThemeTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadSettings() async {
@@ -35,6 +45,28 @@ class _AiCatAppState extends State<AiCatApp> {
       _settings = settings;
       _themeMode = settings.themeMode;
     });
+    _applyAutoThemeIfEnabled();
+    // Masaustu suruumundeki AUTOMATION_TICK_INTERVAL_MS ile ayni fikir:
+    // dakikada bir kontrol yeterli, gunun saatine bagli bir gecis icin
+    // daha sik kontrol gereksiz.
+    _autoThemeTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _applyAutoThemeIfEnabled(),
+    );
+  }
+
+  void _applyAutoThemeIfEnabled() {
+    final settings = _settings;
+    if (settings == null || !settings.autoThemeEnabled) return;
+    final desired = resolveAutoThemeMode(
+      DateTime.now(),
+      dayStart: settings.autoThemeDayStart,
+      nightStart: settings.autoThemeNightStart,
+    );
+    if (desired != _themeMode) {
+      settings.themeMode = desired;
+      setState(() => _themeMode = desired);
+    }
   }
 
   void _onThemeModeChanged(ThemeMode mode) {
