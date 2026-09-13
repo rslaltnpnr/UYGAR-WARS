@@ -22,9 +22,12 @@ import json
 import os
 import random
 import socket
+import socketserver
 import ssl
+import struct
 import subprocess
 import sys
+import threading
 import time
 import traceback
 import webbrowser
@@ -192,7 +195,43 @@ REMOTE_SERVER_PORT = 8765
 REMOTE_MAX_FAILED_ATTEMPTS = 5
 REMOTE_LOCKOUT_SECONDS = 60
 
-APP_VERSION = "1.4.0"
+# "Canli Kontrol" sekmesi (bkz. RemoteLiveControlServer) REST komut
+# sunucusundan (REMOTE_SERVER_PORT) AYRI bir portta calisir - HTTP degil,
+# ozel/hafif bir TLS soket protokolu kullanir (surekli video karesi +
+# gercek zamanli fare/klavye olaylari icin). Telefon tarafi bu portu
+# ayrica eslestirmez; sabit REMOTE_SERVER_PORT + 1 kuralini kullanir
+# (bkz. mobil taraftaki ayni sabit), boylece mevcut eslesmis
+# bilgisayarlar (QR/PIN ile zaten kaydedilmis) yeniden eslestirilmeden
+# bu portu da kullanabilir.
+REMOTE_LIVE_PORT = REMOTE_SERVER_PORT + 1
+REMOTE_LIVE_FRAME_INTERVAL_SECONDS = 1 / 12  # ~12 kare/saniye
+REMOTE_LIVE_JPEG_QUALITY = 55
+REMOTE_LIVE_MAX_FRAME_WIDTH = 960
+REMOTE_LIVE_MOUSE_BUTTONS = frozenset({"left", "right", "middle"})
+REMOTE_LIVE_SPECIAL_KEY_NAMES = frozenset(
+    {
+        "enter",
+        "backspace",
+        "delete",
+        "tab",
+        "esc",
+        "space",
+        "up",
+        "down",
+        "left",
+        "right",
+        "home",
+        "end",
+        "shift",
+        "ctrl",
+        "alt",
+        "caps_lock",
+        "page_up",
+        "page_down",
+    }
+)
+
+APP_VERSION = "1.5.0"
 GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
 UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -1374,6 +1413,47 @@ def capture_screenshot_jpeg_base64(max_width=1280, quality=70):
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
+def live_coords_to_pixels(norm_x, norm_y, screen_width, screen_height):
+    """"Canli Kontrol" sekmesinden gelen (0..1 arasi normallestirilmis)
+    x/y konumunu gercek ekran piksel konumuna cevirir - telefon tarafinin
+    bilgisayarin tam cozunurlugunu onceden bilmesine gerek kalmaz,
+    gosterdigi goruntudeki orani (dokunulan noktanin goruntu genisligine/
+    yuksekligine orani) yeterlidir. Sinirlarin disina tasan degerler
+    ekrana kirpilir (orn. goruntunun kenarindaki bir surukleme)."""
+    x = min(max(norm_x, 0.0), 1.0) * screen_width
+    y = min(max(norm_y, 0.0), 1.0) * screen_height
+    return int(x), int(y)
+
+
+def normalize_live_key_name(name):
+    """Telefondan gelen tus adini normallestirir: bos/None ise None,
+    bilinen bir ozel tus adiysa (REMOTE_LIVE_SPECIAL_KEY_NAMES, kucuk
+    harfe cevrilmis) kendisi, tek karakterli bir harf/rakam/sembolse
+    oldugu gibi, diger (taninmayan, coklu karakterli) adlar icin None
+    doner (yoksayilir - yanlislikla rastgele bir komutun bir tusa
+    esitlenmesini onlemek icin). pynput'a KASITLI olarak bagimli degildir
+    (yalnizca dize/kume islemleri) - boylece testte pynput kurulu
+    olmasa/calisamasa bile (orn. ekransiz CI) test edilebilir; gercek
+    pynput Key/KeyCode nesnesine cevirme, pynput'un zaten import edildigi
+    cagiran yerde (RemoteLiveControlServer) yapilir."""
+    if not name:
+        return None
+    lowered = name.lower()
+    if lowered in REMOTE_LIVE_SPECIAL_KEY_NAMES:
+        return lowered
+    if len(name) == 1:
+        return name
+    return None
+
+
+def normalize_live_mouse_button(name):
+    """Telefondan gelen fare tusu adini dogrular - bilinmeyen/bos bir
+    deger icin (dokunmatik ekranda "sol tik" en dogal varsayilan
+    oldugundan) sessizce "left"e duser."""
+    lowered = str(name or "").lower()
+    return lowered if lowered in REMOTE_LIVE_MOUSE_BUTTONS else "left"
+
+
 class RemoteCommandServer(QThread):
     """
     Telefon uygulamasindan gelen komutlari alan basit bir yerel HTTP
@@ -1649,6 +1729,256 @@ class RemoteCommandServer(QThread):
     def stop(self):
         if self._httpd is not None:
             self._httpd.shutdown()
+
+
+class RemoteLiveControlServer(QThread):
+    """
+    "Ekranda Gez" balonundaki/uygulamadaki "Canlı Kontrol" sekmesi icin:
+    telefona surekli (~12 kare/saniye) JPEG video kareleri gonderen VE
+    telefondan gelen fare/klavye olaylarini GERCEK ZAMANLI olarak bu
+    bilgisayara uygulayan, REST komut sunucusundan (RemoteCommandServer,
+    REMOTE_SERVER_PORT) AYRI, hafif bir TLS soket sunucusu
+    (REMOTE_LIVE_PORT). HTTP kullanmaz - ozel, basit bir protokol:
+
+      1) Istemci TLS ile baglanir, ilk satir olarak PIN'i (\\n ile
+         bitmis duz metin) gonderir.
+      2) PIN dogruysa sunucu "OK\\n" yazar, aksi halde "ERR\\n" yazip
+         baglantiyi kapatir (ayni marka/kilitlenme korumasi -
+         REMOTE_MAX_FAILED_ATTEMPTS/REMOTE_LOCKOUT_SECONDS - REST
+         sunucusuyla aynidir, ama ayri bir failed_attempts sozlugunde
+         izlenir).
+      3) Baglanti kabul edildikten sonra sunucu SUREKLI video karesi
+         yazar: 4 bayt buyuk-endian uzunluk + o kadar JPEG bayti,
+         tekrar tekrar (ayri bir yazici thread'inde).
+      4) Es zamanli olarak (ayni soket, aksi yonde) istemciden gelen
+         satirlari (her biri tek bir JSON komutu, \\n ile ayrilmis) okuyup
+         fare/klavye olarak bu bilgisayara uygular (bkz. _apply_command).
+
+    Ayni TLS sertifikasini (REMOTE_CERT_PATH/REMOTE_KEY_PATH) kullanir,
+    bu yuzden telefonun REST sunucusu icin zaten kaydettigi parmak izi
+    (TOFU) bu port icin de gecerlidir - ayrica bir eslestirme/QR
+    gerekmez; telefon tarafi bu portu REMOTE_SERVER_PORT + 1 olarak
+    sabit turetir.
+
+    Baglanti kopunca (telefon "Canlı Kontrol" sekmesini kapatinca ya da
+    ag koptugunda) o an basili olan TUM klavye tuslari birakilir
+    (_release_all_pressed) - aksi halde uzaktaki telefon bir tusu basili
+    birakip baglantiyi koparirsa bilgisayarda o tus fiziksel olarak
+    "yapisik" kalirdi.
+    """
+
+    session_started = pyqtSignal()
+    session_ended = pyqtSignal()
+
+    def __init__(self, config: ConfigManager, parent=None):
+        super().__init__(parent)
+        self.config = config
+        self._server = None
+
+    def run(self):
+        config = self.config
+        started_signal = self.session_started
+        ended_signal = self.session_ended
+        # IP -> {"count", "blocked_until"} - REST sunucusundaki
+        # failed_attempts ile ayni fikir, ama bu tamamen ayri bir
+        # sunucu/port oldugu icin ayri bir sozluk.
+        failed_attempts = {}
+
+        import pynput.keyboard
+        import pynput.mouse
+
+        def resolve_key(normalized):
+            if normalized in REMOTE_LIVE_SPECIAL_KEY_NAMES:
+                return getattr(pynput.keyboard.Key, normalized, None)
+            return pynput.keyboard.KeyCode.from_char(normalized)
+
+        def resolve_button(name):
+            return {
+                "left": pynput.mouse.Button.left,
+                "right": pynput.mouse.Button.right,
+                "middle": pynput.mouse.Button.middle,
+            }[normalize_live_mouse_button(name)]
+
+        class ConnectionHandler(socketserver.StreamRequestHandler):
+            # Tek bir yanlis PIN satirindan cok daha fazlasini okumaya
+            # kalkip belleği sisirmesin diye - gecerli bir PIN cok daha
+            # kisadir.
+            def _read_pin_line(self):
+                raw = self.rfile.readline(128)
+                return raw.decode("utf-8", "replace").strip()
+
+            def handle(self):
+                client_ip = self.client_address[0]
+                record = failed_attempts.get(client_ip)
+                if record and time.time() < record["blocked_until"]:
+                    try:
+                        self.wfile.write(b"ERR\n")
+                    except OSError:
+                        pass
+                    return
+
+                try:
+                    submitted_pin = self._read_pin_line()
+                except OSError:
+                    return
+                expected_pin = str(config.get("remote_pin"))
+                if not hmac.compare_digest(submitted_pin, expected_pin):
+                    rec = failed_attempts.setdefault(client_ip, {"count": 0, "blocked_until": 0.0})
+                    rec["count"] += 1
+                    if rec["count"] >= REMOTE_MAX_FAILED_ATTEMPTS:
+                        rec["blocked_until"] = time.time() + REMOTE_LOCKOUT_SECONDS
+                        rec["count"] = 0
+                    try:
+                        self.wfile.write(b"ERR\n")
+                    except OSError:
+                        pass
+                    return
+                failed_attempts.pop(client_ip, None)
+
+                try:
+                    self.wfile.write(b"OK\n")
+                    self.wfile.flush()
+                except OSError:
+                    return
+
+                import io
+
+                import mss
+                from PIL import Image
+
+                with mss.mss() as sct:
+                    monitor = sct.monitors[0]
+                screen_width, screen_height = monitor["width"], monitor["height"]
+
+                stop_flag = threading.Event()
+                pressed_keys = set()
+
+                def release_all_pressed():
+                    for key in list(pressed_keys):
+                        try:
+                            keyboard.release(key)
+                        except Exception:
+                            pass
+                    pressed_keys.clear()
+
+                def video_loop():
+                    try:
+                        with mss.mss() as sct:
+                            while not stop_flag.is_set():
+                                start = time.monotonic()
+                                try:
+                                    shot = sct.grab(monitor)
+                                    img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                                    if img.width > REMOTE_LIVE_MAX_FRAME_WIDTH:
+                                        ratio = REMOTE_LIVE_MAX_FRAME_WIDTH / img.width
+                                        img = img.resize(
+                                            (
+                                                REMOTE_LIVE_MAX_FRAME_WIDTH,
+                                                max(1, int(img.height * ratio)),
+                                            )
+                                        )
+                                    buffer = io.BytesIO()
+                                    img.save(buffer, format="JPEG", quality=REMOTE_LIVE_JPEG_QUALITY)
+                                    data = buffer.getvalue()
+                                    self.wfile.write(struct.pack(">I", len(data)))
+                                    self.wfile.write(data)
+                                    self.wfile.flush()
+                                except (OSError, BrokenPipeError):
+                                    stop_flag.set()
+                                    return
+                                elapsed = time.monotonic() - start
+                                remaining = REMOTE_LIVE_FRAME_INTERVAL_SECONDS - elapsed
+                                if remaining > 0:
+                                    time.sleep(remaining)
+                    finally:
+                        stop_flag.set()
+
+                mouse = pynput.mouse.Controller()
+                keyboard = pynput.keyboard.Controller()
+
+                video_thread = threading.Thread(target=video_loop, daemon=True)
+                video_thread.start()
+                started_signal.emit()
+
+                try:
+                    while not stop_flag.is_set():
+                        raw_line = self.rfile.readline(4096)
+                        if not raw_line:
+                            break
+                        try:
+                            cmd = json.loads(raw_line)
+                        except (ValueError, TypeError):
+                            continue
+                        if not isinstance(cmd, dict):
+                            continue
+                        self._apply(cmd, mouse, keyboard, pressed_keys, screen_width, screen_height)
+                except OSError:
+                    pass
+                finally:
+                    stop_flag.set()
+                    release_all_pressed()
+                    ended_signal.emit()
+
+            def _apply(self, cmd, mouse, keyboard, pressed_keys, screen_width, screen_height):
+                kind = cmd.get("t")
+                try:
+                    if kind == "mv":
+                        x, y = live_coords_to_pixels(
+                            float(cmd.get("x", 0)), float(cmd.get("y", 0)), screen_width, screen_height
+                        )
+                        mouse.position = (x, y)
+                    elif kind == "down":
+                        mouse.press(resolve_button(cmd.get("b")))
+                    elif kind == "up":
+                        mouse.release(resolve_button(cmd.get("b")))
+                    elif kind == "click":
+                        mouse.click(resolve_button(cmd.get("b")), max(1, int(cmd.get("n", 1))))
+                    elif kind == "scroll":
+                        mouse.scroll(0, float(cmd.get("dy", 0)))
+                    elif kind == "kd":
+                        normalized = normalize_live_key_name(str(cmd.get("k", "")))
+                        if normalized is not None:
+                            key = resolve_key(normalized)
+                            keyboard.press(key)
+                            pressed_keys.add(key)
+                    elif kind == "ku":
+                        normalized = normalize_live_key_name(str(cmd.get("k", "")))
+                        if normalized is not None:
+                            key = resolve_key(normalized)
+                            keyboard.release(key)
+                            pressed_keys.discard(key)
+                    elif kind == "text":
+                        keyboard.type(str(cmd.get("s", ""))[:2000])
+                except Exception:
+                    pass  # tek bir hatali komut tum oturumu koparmasin
+
+        if not ensure_remote_tls_cert():
+            return
+
+        try:
+            self._server = socketserver.ThreadingTCPServer(("0.0.0.0", REMOTE_LIVE_PORT), ConnectionHandler)
+        except OSError:
+            return
+        self._server.daemon_threads = True
+        self._server.allow_reuse_address = True
+
+        try:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(REMOTE_CERT_PATH, REMOTE_KEY_PATH)
+            self._server.socket = ssl_context.wrap_socket(self._server.socket, server_side=True)
+        except (ssl.SSLError, OSError):
+            self._server.server_close()
+            self._server = None
+            return
+
+        try:
+            self._server.serve_forever()
+        except OSError:
+            pass
+
+    def stop(self):
+        if self._server is not None:
+            self._server.shutdown()
 
 
 # --------------------------------------------------------------------------
@@ -2719,6 +3049,11 @@ class CatCharacter(QWidget):
         self.remote_server.power_command_received.connect(self._on_power_command)
         self.remote_server.start()
 
+        self.live_control_server = RemoteLiveControlServer(self.config, self)
+        self.live_control_server.session_started.connect(self._on_live_control_started)
+        self.live_control_server.session_ended.connect(self._on_live_control_ended)
+        self.live_control_server.start()
+
         self._hotkey_signal = register_global_hotkey(self._open_bubble)
 
         self.tray_icon = None
@@ -2931,6 +3266,27 @@ class CatCharacter(QWidget):
 
     def _on_power_command(self, action):
         handle_power_action(action)
+
+    def _on_live_control_started(self):
+        """Telefon "Canlı Kontrol" sekmesini acip baglaninca - bilgisayarin
+        basinda biri varsa fare/klavyenin uzaktan kullanildigini bilsin
+        diye acik bir bildirim gosterir (sessiz/gizli calismaz)."""
+        if self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                "Canlı Kontrol Başladı",
+                "Telefon bu bilgisayarı fare/klavye ile uzaktan kontrol ediyor.",
+                QSystemTrayIcon.MessageIcon.Warning,
+                5000,
+            )
+
+    def _on_live_control_ended(self):
+        if self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                "Canlı Kontrol Bitti",
+                "Telefonun uzaktan kontrol bağlantısı kapandı.",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
 
     def _show_remote_info(self):
         self._register_activity()
@@ -3980,6 +4336,7 @@ def main():
     cat.show()
 
     app.aboutToQuit.connect(cat.remote_server.stop)
+    app.aboutToQuit.connect(cat.live_control_server.stop)
 
     sys.exit(app.exec())
 

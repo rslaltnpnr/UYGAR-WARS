@@ -204,6 +204,21 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   uygulamadan TAMAMEN ayri bir Flutter motorunda calisir; eslesik
   bilgisayar bilgisini ve API anahtarini cihazda zaten saklanan ayni
   ayarlardan okur, ayrica bir eslestirme gerektirmez.
+- **Canlı Kontrol** ("Bilgisayari Kumanda Et" panelinde): bilgisayarin
+  ekranini GERCEK ZAMANLI (surekli video karesi, ~12 kare/saniye)
+  gosteren tam ekran bir gorunume gecer - ekran otomatik olarak yatay
+  kilitlenir (bilgisayar ekrani genelde genis oldugu icin). Ekrana
+  **dokunup suruklerek** fareyi hareket ettirip tiklayabilir (sag alttaki
+  simgelerle sag tik ve yukari/asagi kaydirma da yapabilirsiniz),
+  sag ustteki klavye simgesiyle acilan yazi kutusuna **gercek zamanli**
+  yazip bilgisayara aninda iletebilirsiniz (Enter/Esc/Tab icin ayri
+  dugmeler de vardir) - sanki bilgisayarin basindaymissiniz gibi.
+  "Bilgisayari Kumanda Et" panelindeki REST komutlarindan (masaustu
+  uygulamasindaki `main.py` - RemoteCommandServer) AYRI, hafif bir TLS
+  soket sunucusuna (bir port fazlasina, ayrica eslestirme gerektirmeden)
+  baglanir; ayni PIN + sertifika parmak izi (TOFU) korumasini kullanir.
+  Bilgisayarin basinda biri varsa, oturum basladiginda/bittiginde sistem
+  tepsisinden acik bir bildirim gorur - bu ozellik sessiz/gizli calismaz.
 
 ## 1) Gerekli araclari kurun (Windows)
 

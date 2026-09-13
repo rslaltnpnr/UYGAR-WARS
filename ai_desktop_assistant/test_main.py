@@ -41,7 +41,10 @@ from main import (
     format_usage_stats,
     is_newer_version,
     is_url_safe_to_open,
+    live_coords_to_pixels,
     merge_history_entries,
+    normalize_live_key_name,
+    normalize_live_mouse_button,
     parse_hh_mm,
     prune_old_backups,
     record_connection,
@@ -1021,3 +1024,47 @@ class TestFormatNotifications:
 
     def test_bos_liste_bos_metin_doner(self):
         assert format_notifications([]) == ""
+
+
+class TestLiveCoordsToPixels:
+    """"Canlı Kontrol" sekmesinden gelen normallestirilmis (0..1) dokunma
+    konumunun gercek ekran pikseline cevrilmesi (bkz.
+    RemoteLiveControlServer)."""
+
+    def test_orta_nokta_dogru_hesaplanir(self):
+        assert live_coords_to_pixels(0.5, 0.5, 1920, 1080) == (960, 540)
+
+    def test_kose_noktalar_dogru_hesaplanir(self):
+        assert live_coords_to_pixels(0.0, 0.0, 1920, 1080) == (0, 0)
+        assert live_coords_to_pixels(1.0, 1.0, 1920, 1080) == (1920, 1080)
+
+    def test_sinir_disi_degerler_kirpilir(self):
+        assert live_coords_to_pixels(-0.5, 2.0, 1920, 1080) == (0, 1080)
+
+
+class TestNormalizeLiveKeyName:
+    def test_ozel_tus_adi_kucuk_harfe_cevrilip_doner(self):
+        assert normalize_live_key_name("Enter") == "enter"
+        assert normalize_live_key_name("ESC") == "esc"
+
+    def test_tek_karakter_oldugu_gibi_doner(self):
+        assert normalize_live_key_name("a") == "a"
+        assert normalize_live_key_name("3") == "3"
+
+    def test_bos_veya_none_none_doner(self):
+        assert normalize_live_key_name("") is None
+        assert normalize_live_key_name(None) is None
+
+    def test_taninmayan_coklu_karakter_none_doner(self):
+        assert normalize_live_key_name("garip_komut") is None
+
+
+class TestNormalizeLiveMouseButton:
+    def test_gecerli_degerler_oldugu_gibi_doner(self):
+        assert normalize_live_mouse_button("right") == "right"
+        assert normalize_live_mouse_button("MIDDLE") == "middle"
+
+    def test_gecersiz_veya_bos_deger_left_e_duser(self):
+        assert normalize_live_mouse_button("") == "left"
+        assert normalize_live_mouse_button(None) == "left"
+        assert normalize_live_mouse_button("garip") == "left"
