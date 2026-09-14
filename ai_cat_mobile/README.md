@@ -219,6 +219,22 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   baglanir; ayni PIN + sertifika parmak izi (TOFU) korumasini kullanir.
   Bilgisayarin basinda biri varsa, oturum basladiginda/bittiginde sistem
   tepsisinden acik bir bildirim gorur - bu ozellik sessiz/gizli calismaz.
+- **Sesli Ajan** ("Bilgisayari Kumanda Et" panelinde): mikrofona basip
+  sozlu olarak bir gorev soylersiniz (orn. "Chrome'u ac ve hava durumuna
+  bak") - yapay zeka, Canli Kontrol ile AYNI baglantiyi kullanarak
+  bilgisayarin ekranini gorur, tek seferde TEK bir adima karar verir
+  (tikla/yaz/tus bas/kaydir), uygular, ekrani yeniden goruntuleyip bir
+  sonraki adima gecer - siz dokunmadan, adim adim ekranda izlersiniz.
+  Ne yaptigini sesli olarak da anlatir (metin-okuma). **Guvenlik:**
+  gonderme, silme, satin alma/odeme, paylasma gibi GERI DONDURULEMEZ
+  gorunen bir adimdan once durup sesli ya da dokunarak acik onay ister
+  ("Onaylıyor musun?") - bu sadece yapay zeka modelinin kendi
+  degerlendirmesine degil, ayrica bagimsiz bir anahtar kelime kontrolune
+  de dayanir (biri kacirsa digeri yakalar). Ekrandaki "DURDUR" dugmesiyle
+  her an kesilebilir; olasi bir sonsuz donguye karsi en fazla 20 adimda
+  kendiliginden durur. Görev belirsizse (orn. hangi hesap, hangi dosya)
+  yapay zeka tahmin yurutmek yerine size sesli bir soru sorup cevabinizi
+  bekler.
 
 ## 1) Gerekli araclari kurun (Windows)
 
