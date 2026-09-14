@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
 import '../models/remote_profile.dart';
@@ -111,7 +112,58 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
     }
   }
 
+  /// Mikrofon iznini kontrol eder, gerekiyorsa (sistem dialogu ile) ister.
+  /// speech_to_text paketinin kendi ic izin istegine GUVENILMEZ - bazi
+  /// cihazlarda/Android surumlerinde initialize() sistem dialogunu hic
+  /// gostermeden sessizce false donebiliyor, kullaniciya "izin verilmedi"
+  /// dedirtip hicbir cikis yolu birakmiyor. Kalici olarak reddedilmisse
+  /// (kullanici "bir daha sorma" secmis) sistem dialogu ARTIK
+  /// gosterilemez - bu durumda kullaniciyi acikca Ayarlar'a yonlendiririz.
+  Future<bool> _ensureMicPermission() async {
+    var status = await Permission.microphone.status;
+    if (status.isGranted) return true;
+
+    if (status.isPermanentlyDenied) {
+      if (!mounted) return false;
+      final openSettings = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Mikrofon izni gerekli'),
+          content: const Text(
+            'Sesli Ajan\'ı kullanmak için mikrofon iznini vermen gerekiyor. '
+            'Daha önce reddettiğin için sistem artık izin sormuyor - '
+            'Ayarlar\'dan elle açman gerekiyor.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Vazgeç'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Ayarları Aç'),
+            ),
+          ],
+        ),
+      );
+      if (openSettings == true) await openAppSettings();
+      return false;
+    }
+
+    status = await Permission.microphone.request();
+    if (status.isGranted) return true;
+
+    if (!mounted) return false;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Sesli Ajan için mikrofon izni gerekiyor.'),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _startListeningForGoal() async {
+    if (!await _ensureMicPermission()) return;
     final available = await _speech.initialize(
       onError: (_) => setState(() => _phase = _AgentPhase.idle),
     );
@@ -119,7 +171,11 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Mikrofon izni verilmedi ya da ses tanıma kullanılamıyor.'),
+          content: Text(
+            'Bu cihazda ses tanıma servisi kullanılamıyor (mikrofon izni '
+            'tamam, ama ör. Google uygulaması/ses tanıma motoru eksik '
+            'olabilir).',
+          ),
         ),
       );
       return;
@@ -336,6 +392,7 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
   }
 
   Future<void> _startListeningForAnswer() async {
+    if (!await _ensureMicPermission()) return;
     if (!mounted) return;
     setState(() {
       _phase = _AgentPhase.listeningAnswer;
