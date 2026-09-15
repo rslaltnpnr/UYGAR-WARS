@@ -333,7 +333,7 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
       _logs.add(describeAgentAction(resolvedAction));
       await _executeAction(resolvedAction);
       _stepCount++;
-      await Future.delayed(const Duration(milliseconds: 700));
+      await _waitForFrameSettle(frame);
     }
 
     if (!_stopRequested && _stepCount >= _maxSteps && mounted) {
@@ -342,6 +342,36 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
     } else if (_stopRequested && mounted) {
       setState(() => _phase = _AgentPhase.done);
     }
+  }
+
+  /// Bir aksiyondan sonra bir sonraki Gemini adimini istemeden once, ekranin
+  /// GERCEKTEN degistigini dogrulamaya calisir - sabit kisa bir bekleme
+  /// (cogu tiklama/yazma aninda gorsel etki yaratir) sonrasinda, kare hala
+  /// aksiyon ONCESIYLE birebir ayniysa (orn. bir uygulama/sekme henuz
+  /// acilmadi), sinirli bir sure daha kisa araliklarla bekler. Bu olmadan
+  /// model, henuz gerceklesmemis bir degisikligi "olmadi" saniyor ve ayni
+  /// adimi tekrar tekrar veriyordu - gozlenen yavasligin/gereksiz tekrarin
+  /// ana nedeni buydu.
+  Future<void> _waitForFrameSettle(Uint8List? referenceFrame) async {
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (referenceFrame == null) return;
+    const pollInterval = Duration(milliseconds: 250);
+    const maxExtraWait = Duration(milliseconds: 2500);
+    var waited = Duration.zero;
+    while (waited < maxExtraWait) {
+      final current = _latestFrame;
+      if (current == null || !_framesIdentical(referenceFrame, current)) return;
+      await Future.delayed(pollInterval);
+      waited += pollInterval;
+    }
+  }
+
+  bool _framesIdentical(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   Future<void> _executeAction(Map<String, dynamic> action) async {
@@ -385,9 +415,10 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
     final thought = action['thought'] as String?;
     if (thought != null && thought.isNotEmpty) _log(thought);
     _logs.add(describeAgentAction(action));
+    final referenceFrame = _latestFrame;
     await _executeAction(action);
     _stepCount++;
-    await Future.delayed(const Duration(milliseconds: 700));
+    await _waitForFrameSettle(referenceFrame);
     unawaited(_runLoop());
   }
 
@@ -478,9 +509,10 @@ class _VoiceAgentScreenState extends State<VoiceAgentScreen> {
     final thought = action['thought'] as String?;
     if (thought != null && thought.isNotEmpty) _log(thought);
     _logs.add(describeAgentAction(action));
+    final referenceFrame = _latestFrame;
     await _executeAction(action);
     _stepCount++;
-    await Future.delayed(const Duration(milliseconds: 700));
+    await _waitForFrameSettle(referenceFrame);
     unawaited(_runLoop());
   }
 
