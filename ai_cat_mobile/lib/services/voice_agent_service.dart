@@ -144,12 +144,9 @@ class VoiceAgentService {
     required Uint8List screenshotJpeg,
     String? userAnswer,
   }) async {
-    final model = GenerativeModel(
-      model: modelName,
-      apiKey: apiKey,
-      systemInstruction: Content.system(_agentSystemInstruction),
-      generationConfig: GenerationConfig(responseMimeType: 'application/json'),
-    );
+    final systemInstruction = Content.system(_agentSystemInstruction);
+    final generationConfig =
+        GenerationConfig(responseMimeType: 'application/json');
 
     final buffer = StringBuffer()
       ..writeln('Kullanıcının hedefi: $goal')
@@ -174,25 +171,58 @@ class VoiceAgentService {
       ]),
     ];
 
+    Object finalError;
     try {
-      final response = await model.generateContent(content);
+      final response = await generateGeminiContentWithRetry(
+        apiKey: apiKey,
+        modelName: modelName,
+        systemInstruction: systemInstruction,
+        generationConfig: generationConfig,
+        content: content,
+        maxAttempts: 3,
+      );
       final text = response.text;
       if (text == null || text.isEmpty) return null;
       return parseAgentAction(text);
-    } catch (exc) {
-      throw GeminiRequestException(_friendlyMessage(exc));
+    } catch (primaryError) {
+      finalError = primaryError;
+      final shouldFallback = modelName != geminiFallbackModel &&
+          (isGeminiOverloadError(primaryError) ||
+              isGeminiModelRetiredError(primaryError) ||
+              isGeminiQuotaError(primaryError));
+      if (shouldFallback) {
+        try {
+          final response = await generateGeminiContentWithRetry(
+            apiKey: apiKey,
+            modelName: geminiFallbackModel,
+            systemInstruction: systemInstruction,
+            generationConfig: generationConfig,
+            content: content,
+            maxAttempts: 2,
+          );
+          final text = response.text;
+          if (text == null || text.isEmpty) return null;
+          return parseAgentAction(text);
+        } catch (fallbackError) {
+          finalError = fallbackError;
+        }
+      }
     }
+    throw GeminiRequestException(_friendlyMessage(finalError));
   }
 
   String _friendlyMessage(Object exc) {
-    final text = exc.toString().toLowerCase();
-    if (text.contains('429') || text.contains('quota')) {
+    if (isGeminiQuotaError(exc)) {
       return 'Ücretsiz kullanım kotası doldu, biraz bekleyip tekrar dene.';
     }
-    if (text.contains('503') || text.contains('overloaded')) {
+    if (isGeminiOverloadError(exc)) {
       return 'Google\'ın sunucuları şu an yoğun, birazdan tekrar dener misin?';
     }
-    if (text.contains('socketexception') || text.contains('network')) {
+    if (isGeminiModelRetiredError(exc)) {
+      return 'Kullanılan yapay zeka modeli güncellenmiş görünüyor. '
+          'Lütfen tekrar dener misin?';
+    }
+    if (isGeminiNetworkError(exc)) {
       return 'İnternet bağlantısı kurulamadı.';
     }
     return 'Ajan bir adım belirlerken bir sorun oluştu.';
