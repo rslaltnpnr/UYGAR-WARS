@@ -12,11 +12,6 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
-    <!-- "Sesli Ajan" (bkz. VoiceAgentScreen) icin sesli komut alma
-         (speech_to_text). Kutuphanenin kendi bildiriminden Gradle
-         birlestirmesiyle zaten geliyor ama kritik bir izin oldugu icin
-         burada da acikca beyan edilir. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <!-- Tum ag trafigi (Gemini API + bilgisayardaki "Uzaktan Kumanda"
          ozelligi) artik HTTPS uzerinden gider; duz metin (cleartext)
          trafige izin verilmiyor. -->
