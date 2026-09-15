@@ -9,6 +9,7 @@ Calistirmak icin:
     pytest
 """
 
+import tempfile
 from datetime import datetime, timedelta
 
 import pytest
@@ -49,10 +50,12 @@ from main import (
     prune_old_backups,
     record_connection,
     resolve_auto_theme_mode,
+    sanitize_teleport_filename,
     select_context_turns,
     should_fire_rule,
     should_run_auto_backup,
     tail_access_log,
+    unique_teleport_destination,
     validate_custom_command,
 )
 
@@ -1068,3 +1071,49 @@ class TestNormalizeLiveMouseButton:
         assert normalize_live_mouse_button("") == "left"
         assert normalize_live_mouse_button(None) == "left"
         assert normalize_live_mouse_button("garip") == "left"
+
+
+class TestSanitizeTeleportFilename:
+    """"Dosya Teleport" ile telefondan gelen dosya adinin guvenli hale
+    getirilmesi (bkz. RemoteCommandServer'in /file uc noktasi)."""
+
+    def test_normal_ad_oldugu_gibi_doner(self):
+        assert sanitize_teleport_filename("tatil_fotografi.jpg") == "tatil_fotografi.jpg"
+
+    def test_yol_bilesenleri_atilir(self):
+        assert sanitize_teleport_filename("../../gizli/parola.txt") == "parola.txt"
+        assert sanitize_teleport_filename("C:\\Windows\\System32\\evil.exe") == "evil.exe"
+
+    def test_bos_veya_sadece_nokta_varsayilan_ada_duser(self):
+        assert sanitize_teleport_filename("") == "dosya"
+        assert sanitize_teleport_filename(None) == "dosya"
+        assert sanitize_teleport_filename("..") == "dosya"
+        assert sanitize_teleport_filename(".") == "dosya"
+
+
+class TestUniqueTeleportDestination:
+    """Ayni adli dosya zaten varsa " (2)", " (3)" ile benzersiz bir hedef
+    yol uretilmesi - telefondan arka arkaya gonderilen ayni isimli
+    dosyalarin birbirinin uzerine yazilmamasi icin."""
+
+    def test_dosya_yoksa_ad_degismez(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            destination = unique_teleport_destination(tmp_dir, "rapor.pdf")
+            assert destination.endswith("rapor.pdf")
+
+    def test_ayni_ad_varsa_sayac_eklenir(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            first = unique_teleport_destination(tmp_dir, "rapor.pdf")
+            with open(first, "w", encoding="utf-8") as f:
+                f.write("x")
+            second = unique_teleport_destination(tmp_dir, "rapor.pdf")
+            assert second != first
+            assert second.endswith("rapor (2).pdf")
+
+    def test_uzanti_korunur(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            first = unique_teleport_destination(tmp_dir, "not.txt")
+            with open(first, "w", encoding="utf-8") as f:
+                f.write("x")
+            second = unique_teleport_destination(tmp_dir, "not.txt")
+            assert second.endswith(".txt")

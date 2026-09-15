@@ -231,7 +231,7 @@ REMOTE_LIVE_SPECIAL_KEY_NAMES = frozenset(
     }
 )
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
 GITHUB_REPO = "rslaltnpnr/ai-cat-assistant"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
 UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
@@ -1454,6 +1454,44 @@ def normalize_live_mouse_button(name):
     return lowered if lowered in REMOTE_LIVE_MOUSE_BUTTONS else "left"
 
 
+REMOTE_FILE_TELEPORT_DIR_NAME = "AI Kedi Asistani - Telefondan Gelenler"
+REMOTE_FILE_TELEPORT_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
+def received_files_dir():
+    """Telefondan "Dosya Teleport" ile gonderilen dosyalarin kaydedildigi
+    sabit klasor - her seferinde nereye kaydedilecegi sorulmaz/secilmez,
+    hep ayni yer kullanilir. Kullanicinin ev dizininde, yoksa olusturulur."""
+    directory = os.path.join(os.path.expanduser("~"), REMOTE_FILE_TELEPORT_DIR_NAME)
+    os.makedirs(directory, exist_ok=True)
+    return directory
+
+
+def sanitize_teleport_filename(name):
+    """Telefondan gelen dosya adini guvenli hale getirir: yol bilesenlerini
+    (orn. "../gizli/dosya" ya da "C:\\Windows\\..") atar - boylece kotu
+    niyetli/bozuk bir istemci hedef klasorun disina yazamaz. Sonuc bossa
+    (orn. sadece "." ya da ".." gonderilmisse) "dosya" varsayilan adi
+    kullanilir."""
+    base = os.path.basename(str(name or "").strip().replace("\\", "/"))
+    base = base.strip().lstrip(".")
+    return base or "dosya"
+
+
+def unique_teleport_destination(directory, filename):
+    """Ayni adli bir dosya zaten varsa uzerine yazmak yerine " (2)", " (3)"
+    gibi bir sayac ekleyerek benzersiz bir hedef yol uretir - boylece
+    telefondan arka arkaya gonderilen ayni isimli dosyalar birbirinin
+    uzerine yazilmaz."""
+    root, ext = os.path.splitext(filename)
+    candidate = os.path.join(directory, filename)
+    counter = 2
+    while os.path.exists(candidate):
+        candidate = os.path.join(directory, f"{root} ({counter}){ext}")
+        counter += 1
+    return candidate
+
+
 class RemoteCommandServer(QThread):
     """
     Telefon uygulamasindan gelen komutlari alan basit bir yerel HTTP
@@ -1467,6 +1505,9 @@ class RemoteCommandServer(QThread):
       POST /history/import {"pin", "entries"} - telefondaki yeni kayitlari sohbet gecmisine ekler (iki yonlu senkron)
       POST /alerts     {"pin", "since_id"}   - since_id'den sonraki hata/uyari bildirimlerini dondurur
       POST /clipboard  {"pin", "action", "text"} - "push": panoyu text'e ayarlar, "pull": panoyu dondurur
+      POST /file       {"pin", "filename", "content_base64"} - "Dosya Teleport": dosyayi
+        received_files_dir() sabit klasorune kaydeder (ayni adda dosya varsa " (2)" vb.
+        ekler, uzerine yazmaz)
     Gecerli bir /open, /media ya da /power istegi geldiginde ilgili sinyal
     (ana/GUI thread'ine Qt tarafindan otomatik kuyruklanir) yayinlanir.
     """
@@ -1474,6 +1515,7 @@ class RemoteCommandServer(QThread):
     command_received = pyqtSignal(str)
     media_command_received = pyqtSignal(str)
     power_command_received = pyqtSignal(str)
+    file_received = pyqtSignal(str)
 
     MAX_ALERTS = 50
 
@@ -1522,6 +1564,7 @@ class RemoteCommandServer(QThread):
         open_signal = self.command_received
         media_signal = self.media_command_received
         power_signal = self.power_command_received
+        file_signal = self.file_received
         # IP -> {"count": basarisiz deneme sayisi, "blocked_until": epoch}
         # Kaba kuvvetle PIN denemeyi yavaslatmak icin bellek ici, basit bir
         # kilitlenme mekanizmasi (kalici loglama yapilmiyor).
@@ -1550,6 +1593,7 @@ class RemoteCommandServer(QThread):
                     "/automation",
                     "/alerts",
                     "/clipboard",
+                    "/file",
                 ):
                     self._send_json(404, {"error": "bulunamadi"})
                     return
@@ -1685,6 +1729,32 @@ class RemoteCommandServer(QThread):
                         return
                     # action == "pull"
                     self._send_json(200, {"status": "ok", "text": get_clipboard_text()})
+                    return
+
+                if self.path == "/file":
+                    filename = sanitize_teleport_filename(data.get("filename"))
+                    content_b64 = data.get("content_base64")
+                    if not isinstance(content_b64, str) or not content_b64:
+                        self._send_json(400, {"error": "dosya icerigi eksik"})
+                        return
+                    try:
+                        content = base64.b64decode(content_b64, validate=True)
+                    except (ValueError, TypeError):
+                        self._send_json(400, {"error": "dosya icerigi cozulemedi"})
+                        return
+                    if len(content) > REMOTE_FILE_TELEPORT_MAX_BYTES:
+                        self._send_json(400, {"error": "dosya cok buyuk (en fazla 25 MB)"})
+                        return
+                    try:
+                        destination = unique_teleport_destination(received_files_dir(), filename)
+                        with open(destination, "wb") as f:
+                            f.write(content)
+                    except OSError as exc:
+                        self._send_json(500, {"error": f"dosya kaydedilemedi: {exc}"})
+                        return
+                    saved_name = os.path.basename(destination)
+                    file_signal.emit(saved_name)
+                    self._send_json(200, {"status": "ok", "saved_as": saved_name})
                     return
 
                 # self.path == "/alerts"
@@ -3047,6 +3117,7 @@ class CatCharacter(QWidget):
         self.remote_server.command_received.connect(self._on_remote_command)
         self.remote_server.media_command_received.connect(self._on_media_command)
         self.remote_server.power_command_received.connect(self._on_power_command)
+        self.remote_server.file_received.connect(self._on_file_received)
         self.remote_server.start()
 
         self.live_control_server = RemoteLiveControlServer(self.config, self)
@@ -3266,6 +3337,18 @@ class CatCharacter(QWidget):
 
     def _on_power_command(self, action):
         handle_power_action(action)
+
+    def _on_file_received(self, filename):
+        """Telefondan "Dosya Teleport" ile bir dosya geldiginde - bilgisayarin
+        basinda biri varsa acik bir bildirim gosterir (sessiz/gizli calismaz)."""
+        if self.tray_icon is not None:
+            self.tray_icon.showMessage(
+                "Dosya Alındı",
+                f'"{filename}" telefondan alındı ve '
+                f'"{REMOTE_FILE_TELEPORT_DIR_NAME}" klasörüne kaydedildi.',
+                QSystemTrayIcon.MessageIcon.Information,
+                4000,
+            )
 
     def _on_live_control_started(self):
         """Telefon "Canlı Kontrol" sekmesini acip baglaninca - bilgisayarin

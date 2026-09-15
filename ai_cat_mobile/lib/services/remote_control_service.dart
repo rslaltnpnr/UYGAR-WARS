@@ -93,6 +93,16 @@ class AutomationFetchResult {
   const AutomationFetchResult(this.fingerprint, this.rules);
 }
 
+/// [teleportFile] sonucu: parmak izinin yani sira bilgisayarda dosyanin
+/// gercekten kaydedildigi ad (ayni adda dosya zaten varsa " (2)" gibi bir
+/// sayacla degismis olabilir).
+class FileTeleportResult {
+  final String fingerprint;
+  final String savedAs;
+
+  const FileTeleportResult(this.fingerprint, this.savedAs);
+}
+
 class _RawResponse {
   final int statusCode;
   final String body;
@@ -121,6 +131,9 @@ class RemoteControlService {
     required String path,
     required Map<String, dynamic> body,
     required String pinnedFingerprint,
+    Duration connectTimeout = const Duration(seconds: 5),
+    Duration sendTimeout = const Duration(seconds: 8),
+    Duration responseTimeout = const Duration(seconds: 8),
   }) async {
     final Uri uri;
     try {
@@ -133,7 +146,7 @@ class RemoteControlService {
     var fingerprintMismatch = false;
 
     final client = HttpClient();
-    client.connectionTimeout = const Duration(seconds: 5);
+    client.connectionTimeout = connectTimeout;
     client.badCertificateCallback = (cert, host, certPort) {
       final fingerprint = sha256.convert(cert.der).toString();
       observedFingerprint = fingerprint;
@@ -146,19 +159,15 @@ class RemoteControlService {
 
     try {
       final encodedBody = utf8.encode(jsonEncode(body));
-      final request = await client.postUrl(uri).timeout(
-            const Duration(seconds: 5),
-          );
+      final request = await client.postUrl(uri).timeout(connectTimeout);
       request.headers.set('Content-Type', 'application/json');
       request.headers.set('Content-Length', encodedBody.length.toString());
       request.add(encodedBody);
-      final response = await request.close().timeout(
-            const Duration(seconds: 8),
-          );
+      final response = await request.close().timeout(sendTimeout);
       final responseBody = await response
           .transform(utf8.decoder)
           .join()
-          .timeout(const Duration(seconds: 8));
+          .timeout(responseTimeout);
 
       return _RawResponse(
         response.statusCode,
@@ -465,6 +474,50 @@ class RemoteControlService {
       return ClipboardFetchResult(response.fingerprint, data['text'] as String? ?? '');
     } catch (_) {
       throw RemoteControlException('Pano okunamadı.');
+    }
+  }
+
+  /// "Dosya Teleport": secilen dosyayi bilgisayara gonderir - bilgisayar
+  /// tarafinda hep AYNI sabit klasore (bkz. main.py -
+  /// received_files_dir()) kaydedilir, her seferinde nereye kaydedilecegi
+  /// sorulmaz. Buyuk dosyalar (fotograf/belge) icin diger komutlardan daha
+  /// uzun zaman asimlari kullanilir.
+  Future<FileTeleportResult> teleportFile({
+    required String ip,
+    required int port,
+    required String pin,
+    required String filename,
+    required Uint8List bytes,
+    required String pinnedFingerprint,
+  }) async {
+    if (ip.trim().isEmpty) {
+      throw RemoteControlException(
+        'Once bilgisayarin IP adresini ve PIN kodunu gir.',
+      );
+    }
+    final response = await _post(
+      ip: ip,
+      port: port,
+      path: '/file',
+      body: {
+        'pin': pin,
+        'filename': filename,
+        'content_base64': base64Encode(bytes),
+      },
+      pinnedFingerprint: pinnedFingerprint,
+      connectTimeout: const Duration(seconds: 8),
+      sendTimeout: const Duration(seconds: 60),
+      responseTimeout: const Duration(seconds: 30),
+    );
+    _throwForCommonErrors(response);
+    try {
+      final data = jsonDecode(response.body);
+      return FileTeleportResult(
+        response.fingerprint,
+        data['saved_as'] as String? ?? filename,
+      );
+    } catch (_) {
+      throw RemoteControlException('Sunucu yaniti okunamadı.');
     }
   }
 

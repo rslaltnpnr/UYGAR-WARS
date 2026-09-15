@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
@@ -791,6 +794,80 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
     }
   }
 
+  // Masaustundeki received_files_dir() ile ayni sinir (bkz. main.py) -
+  // sinira takilan buyuk bir dosyayi yavas bir yuklemenin sonunda degil,
+  // secer secmez reddetmek icin burada da kontrol edilir.
+  static const int _fileTeleportMaxBytes = 25 * 1024 * 1024;
+
+  Future<void> _sendFile() async {
+    if (_busy || _activeProfile == null) return;
+    final PlatformFile? file;
+    try {
+      file = await FilePicker.pickFile();
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Dosya seçilemedi: $exc';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (file == null) return;
+    final Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Dosya okunamadı: $exc';
+        _statusIsError = true;
+      });
+      return;
+    }
+    if (bytes.length > _fileTeleportMaxBytes) {
+      if (!mounted) return;
+      setState(() {
+        _status = 'Dosya çok büyük (en fazla 25 MB).';
+        _statusIsError = true;
+      });
+      return;
+    }
+    _saveConnectionInfo();
+    setState(() {
+      _busy = true;
+      _status = null;
+    });
+    try {
+      final result = await _service.teleportFile(
+        ip: _ipController.text.trim(),
+        port: int.tryParse(_portController.text.trim()) ?? 8765,
+        pin: _pinController.text.trim(),
+        filename: file.name,
+        bytes: bytes,
+        pinnedFingerprint: _activeProfile?.certFingerprint ?? '',
+      );
+      _updateActiveFingerprint(result.fingerprint);
+      await _commandHistory.add(
+        action: 'Dosya Teleport',
+        detail: result.savedAs,
+        profileName: _activeProfile?.name ?? '',
+      );
+      if (!mounted) return;
+      setState(() {
+        _status = '"${result.savedAs}" bilgisayara gönderildi.';
+        _statusIsError = false;
+      });
+    } catch (exc) {
+      if (!mounted) return;
+      setState(() {
+        _status = exc.toString();
+        _statusIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _openLiveControl() async {
     final profile = _activeProfile;
     if (_busy || profile == null) return;
@@ -1274,6 +1351,24 @@ class _RemoteControlSheetState extends State<RemoteControlSheet> {
                         ),
                       ),
                     ],
+                  ),
+                  Divider(color: colors.divider, height: 32),
+                  Text(
+                    'Dosya Teleport',
+                    style: TextStyle(color: colors.textMuted, fontSize: 12),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Bilgisayarda hep aynı klasöre kaydedilir: '
+                    '"AI Kedi Asistani - Telefondan Gelenler"',
+                    style: TextStyle(color: colors.textMuted, fontSize: 11),
+                  ),
+                  const SizedBox(height: 6),
+                  OutlinedButton.icon(
+                    onPressed:
+                        _busy || _activeProfile == null ? null : _sendFile,
+                    icon: const Icon(Icons.send_to_mobile_outlined),
+                    label: const Text('Dosya Gönder'),
                   ),
                 ],
                 if (_status != null) ...[
