@@ -241,6 +241,14 @@ karakteri (PyQt6).
   fark etsin diye - sessiz/gizli calismaz). Baglanti kesilince o an
   basili olan tum tuslar otomatik birakilir (bir tusun fiziksel olarak
   "yapisik" kalmamasi icin).
+- **Dosya Teleport**: telefon uygulamasindan "Dosya Gönder" ile secilen
+  bir dosya, bu bilgisayarda hep AYNI sabit klasore
+  ("AI Kedi Asistani - Telefondan Gelenler", kullanicinin ev dizininde)
+  kaydedilir - her seferinde nereye kaydedilecegi sorulmaz. Ayni adda
+  dosya varsa uzerine yazilmaz, " (2)" gibi bir sayac eklenir; dosya adi
+  yol bilesenlerinden (orn. "../") arindirilir. `POST /file` uc noktasi
+  (ayni PIN+TLS korumali REST sunucusu uzerinden) en fazla 25 MB kabul
+  eder. Dosya gelince sistem tepsisinden acik bir bildirim gosterilir.
 - **Hakkinda**: sag tik menusundeki "Hakkinda" ile surum numarasini ve
   proje deposunun linkini gorebilirsiniz.
 

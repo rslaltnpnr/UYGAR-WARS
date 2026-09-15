@@ -219,6 +219,16 @@ tum masaustunde degil, **uygulamanin kendi ekraninda** rastgele gezinir
   baglanir; ayni PIN + sertifika parmak izi (TOFU) korumasini kullanir.
   Bilgisayarin basinda biri varsa, oturum basladiginda/bittiginde sistem
   tepsisinden acik bir bildirim gorur - bu ozellik sessiz/gizli calismaz.
+- **Dosya Teleport** ("Bilgisayari Kumanda Et" panelinde): telefonda bir
+  dosya secip **tek dokunusla** bilgisayara gonderir - nereye
+  kaydedilecegi HER SEFERINDE sorulmaz, hep AYNI sabit klasore
+  ("AI Kedi Asistani - Telefondan Gelenler", kullanicinin ev dizininde)
+  kaydedilir; ayni adda dosya varsa uzerine yazmaz, " (2)" gibi bir sayac
+  ekler. Bilgisayarin basinda biri varsa dosya gelince sistem
+  tepsisinden acik bir bildirim gorur. `POST /file` uc noktasi
+  (RemoteCommandServer, mevcut PIN + sertifika parmak izi korumasiyle)
+  uzerinden 25 MB'a kadar dosya kabul eder.
+
 ## 1) Gerekli araclari kurun (Windows)
 
 1. **Flutter SDK**: https://docs.flutter.dev/get-started/install/windows
