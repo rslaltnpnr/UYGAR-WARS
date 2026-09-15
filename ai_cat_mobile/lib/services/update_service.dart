@@ -24,7 +24,7 @@ class MobileUpdateInfo {
 /// kurulumu bozmayan, tamamen opsiyonel bir kontrol (masaustu suruumundeki
 /// UpdateCheckWorker ile ayni mantik).
 class UpdateService {
-  static const _repo = 'rslaltnpnr/UYGAR-WARS';
+  static const _repo = 'rslaltnpnr/ai-cat-assistant';
   static const _apkAssetName = 'ai-kedi-asistani.apk';
   static const _timeout = Duration(seconds: 5);
 

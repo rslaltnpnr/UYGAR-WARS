@@ -232,7 +232,7 @@ REMOTE_LIVE_SPECIAL_KEY_NAMES = frozenset(
 )
 
 APP_VERSION = "1.5.0"
-GITHUB_REPO = "rslaltnpnr/UYGAR-WARS"
+GITHUB_REPO = "rslaltnpnr/ai-cat-assistant"
 UPDATE_CHECK_TIMEOUT_SECONDS = 5
 UPDATE_DOWNLOAD_TIMEOUT_SECONDS = 60
 # release-desktop.yml release'e bu adlarla dosya yukler - degistirilirse
