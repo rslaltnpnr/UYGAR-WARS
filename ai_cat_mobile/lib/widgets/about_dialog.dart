@@ -9,7 +9,7 @@ import '../theme/app_colors.dart';
 class AboutAppDialog extends StatelessWidget {
   const AboutAppDialog({super.key});
 
-  static const _repoUrl = 'https://github.com/rslaltnpnr/UYGAR-WARS';
+  static const _repoUrl = 'https://github.com/rslaltnpnr/ai-cat-assistant';
 
   @override
   Widget build(BuildContext context) {
